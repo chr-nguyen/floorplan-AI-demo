@@ -20,32 +20,28 @@ This application runs a multi-step AI pipeline to convert a flat image into an i
 
 ## 📦 Deployment (GitHub Pages)
 
-This project is configured for static deployment on GitHub Pages.
+This project includes a **GitHub Actions workflow** (`.github/workflows/deploy.yml`) that automatically builds and deploys the site to GitHub Pages whenever you push to the `main` branch.
 
-### Prerequisites
+### 🚀 Setup Instructions
 
-1.  **Fal.ai API Key**: You need an API key from [fal.ai](https://fal.ai/dashboard).
-2.  **GitHub Repository**: Push this code to a GitHub repository.
+1.  **Push to GitHub**: Ensure your code is in a GitHub repository.
+2.  **Configure Secrets (Critical)**:
+    - Go to your Repository **Settings** > **Secrets and variables** > **Actions**.
+    - Click **New repository secret**.
+    - **Name**: `PUBLIC_FAL_KEY`
+    - **Value**: Your Fal.ai API key (e.g., `123-abc...`).
+    - *Note: This is required because the build process needs the key to bundle it into the static site.*
 
-### Setup Instructions
+3.  **Enable GitHub Pages**:
+    - Go to **Settings** > **Pages**.
+    - Under **Build and deployment** > **Source**, select **GitHub Actions**.
+    - (The workflow will handle the rest on the next push).
 
-1.  **Environment Variables**:
-    Since GitHub Pages is a static host, the API key must be embedded in the build.
-    *   Create a file named `.env` in the root (if running locally).
-    *   Add your key: `PUBLIC_FAL_KEY="your-fal-key-here"`
-    *   **Security Warning**: This key will be visible to anyone who inspects the website network traffic. This is acceptable for personal demos but strictly not for production apps without a backend proxy.
+4.  **Deploy**:
+    - Just push a commit to `main`, and the "Deploy to GitHub Pages" action will run automatically.
 
-2.  **Build & Deploy**:
-
-    **Option A: Manual Upload**
-    1.  Run `npm install`
-    2.  Run `npm run build`
-    3.  Upload the contents of the `dist/` folder to your server or `gh-pages` branch.
-
-    **Option B: GitHub Actions**
-    1.  Go to your GitHub Repo > Settings > Secrets and Variables > Actions.
-    2.  Add a New Repository Secret: `PUBLIC_FAL_KEY` with your key value.
-    3.  The project includes a standard Astro build setup. You may need to add a `.github/workflows/deploy.yml` file to automate this (standard Astro GitHub Pages workflow).
+### Security Note
+Since this is a client-side demo, your `PUBLIC_FAL_KEY` will be visible in the browser network traffic. This is acceptable for personal demos, but be aware of usage limits.
 
 ## 💻 Local Development
 
