@@ -1,0 +1,13 @@
+---
+import ImageUploader from "../components/ImageUploader.tsx";
+import Layout from "../layouts/Layout.astro";
+
+// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
+// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+---
+
+<Layout>
+	<main style="width: 100%; margin: 0 auto; padding: 2rem;">
+		<ImageUploader client:load />
+	</main>
+</Layout>

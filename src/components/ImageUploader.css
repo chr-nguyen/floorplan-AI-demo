@@ -1,0 +1,115 @@
+.uploader-wrapper {
+  width: 90%;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.uploader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upload-btn {
+  background: #0070f3;
+  color: white;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+  display: inline-block;
+  margin-bottom: 2rem;
+}
+
+.upload-btn:hover {
+  background: #0051a2;
+}
+
+.file-input {
+  display: none;
+}
+
+.results-list {
+  width: 100%;
+  max-width: 2000px;
+  /* Constrain width for better readability */
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.result-row {
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.step-label {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.image-preview-full {
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  /* Prevent extremely tall images */
+  object-fit: contain;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.placeholder-box {
+  width: 100%;
+  height: 300px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-weight: 500;
+}
+
+.generate-btn {
+  /* Assuming a variable or strict color */
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.generate-btn:hover {
+  background-color: #059669;
+}
+
+.model-viewer-wrapper {
+  width: 100%;
+  height: 500px;
+  background: #eef;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+}
+
+.prompt-textarea {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 0.9rem;
+  min-height: 60px;
+  font-family: inherit;
+  resize: vertical;
+}
