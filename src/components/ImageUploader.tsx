@@ -4,6 +4,10 @@ import ModelViewer, { type ModelViewerRef } from './ModelViewer';
 import './ImageUploader.css';
 
 // For GitHub Pages demo: Use client-side key directly
+if (!import.meta.env.PUBLIC_FAL_KEY) {
+  console.error("CRITICAL: PUBLIC_FAL_KEY is missing from environment variables.");
+}
+
 fal.config({
   credentials: import.meta.env.PUBLIC_FAL_KEY,
 });
@@ -166,11 +170,11 @@ export default function ImageUploader() {
       // Send to Flux Image-to-Image
       console.log("Step 6: Stylizing with Flux");
 
-      const prompt = image.stylizePrompt || "Hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing";
+      const prompt = image.stylizePrompt || "Take this dollhouse view and create a hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing";
       const requestInput = {
         image_url: storageUrl,
         prompt: prompt,
-        strength: 0.55
+        strength: 0.75
       };
 
       console.log('DEBUG: Flux Request Input:', requestInput);
@@ -235,7 +239,7 @@ export default function ImageUploader() {
                         marginTop: '0.5rem',
                         fontSize: '0.9rem',
                         padding: '10px 20px',
-                        background: 'darkgreen', // Distinct purple color
+                        background: '#0070f3', // Distinct purple color
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -244,7 +248,7 @@ export default function ImageUploader() {
                         opacity: img.pipelineStep === 'rerendering' ? 0.7 : 1
                       }}
                     >
-                      {(img.maskUrl || img.pipelineStep === 'masking' || img.depthUrl || img.pipelineStep === 'depth') ? '✨ Rendering to 3D Model...' : '✨ Render to 3D Model'}
+                      {(img.maskUrl || img.pipelineStep === 'masking' || img.depthUrl || img.pipelineStep === 'depth') ? '📦 Rendering to 3D Model...' : '📦 Render to 3D Model'}
                     </button>
 
                     {/* Mask (Step 1) */}
@@ -272,46 +276,49 @@ export default function ImageUploader() {
                     )} */}
 
                     {/* Final 3D (Step 3) */}
-                    {img.result3d && (
+                    {(img.result3d || ['masking', 'depth', 'modeling'].includes(img.pipelineStep)) && (
                       <div style={{ minWidth: '300px', width: '100%' }}>
                         <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444' }}>2. create 3D Model</div>
 
                         <div style={{ position: 'relative' }}>
                           <div className="model-viewer-wrapper">
-                            <ModelViewer
-                              ref={el => { modelViewerRefs.current[index] = el; }}
-                              modelUrl={img.result3d}
-                            />
+                            {img.result3d ? (
+                              <ModelViewer
+                                ref={el => { modelViewerRefs.current[index] = el; }}
+                                modelUrl={img.result3d}
+                              />
+                            ) : (
+                              <div className="loading-overlay">
+                                <div className="spinner"></div>
+                                <div className="status-text">
+                                  {img.pipelineStep === 'masking' && 'Step 1/3: Analyzing Floorplan (SAM2)...'}
+                                  {img.pipelineStep === 'depth' && 'Step 2/3: Estimating Depth (ZoeDepth)...'}
+                                  {img.pipelineStep === 'modeling' && 'Step 3/3: Generating 3D Mesh...'}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Capture Button */}
-                          <button
-                            onClick={() => handleCapture(index)}
-                            style={{
-                              marginTop: '0.5rem',
-                              fontSize: '0.8rem',
-                              padding: '10px 20px',
-                              background: '#333',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              width: '100%',
-                            }}
-                          >
-                            📸 Capture View
-                          </button>
+                          {/* Capture Button - Only show when result is ready */}
+                          {img.result3d && (
+                            <button
+                              onClick={() => handleCapture(index)}
+                              style={{
+                                marginTop: '0.5rem',
+                                fontSize: '0.8rem',
+                                padding: '10px 20px',
+                                background: '#0070f3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                width: '100%',
+                              }}
+                            >
+                              📸 Capture View
+                            </button>
+                          )}
                         </div>
-                        {/*  ) : (
-                         <div style={{ height: '200px', background: '#eef', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                           {!img.loading ? (
-                             <button className="generate-btn" onClick={() => generate3D(index)}>
-                               ✨ Start Pipeline
-                             </button>
-                           ) : (
-                             <span>Processing...</span>
-                           )}
-                         </div> */}
                       </div>
                     )}
 
@@ -326,7 +333,7 @@ export default function ImageUploader() {
                         <textarea
                           className="prompt-textarea"
                           placeholder="Enter stylization prompt (e.g. 'Modern interior, sunny day')..."
-                          value={img.stylizePrompt || "Hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing"}
+                          value={img.stylizePrompt || "Take this dollhouse view and create a hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing"}
                           onChange={(e) => updateImageState(index, { stylizePrompt: e.target.value })}
                         />
 
@@ -337,7 +344,7 @@ export default function ImageUploader() {
                             marginTop: '0.5rem',
                             fontSize: '0.9rem',
                             padding: '10px 20px',
-                            background: '#7c3aed', // Distinct purple color
+                            background: '#0070f3', // Distinct purple color
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',

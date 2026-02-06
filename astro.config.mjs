@@ -5,4 +5,6 @@ import react from '@astrojs/react';
 export default defineConfig({
   integrations: [react()],
   output: 'static',
+  site: 'https://chr-nguyen.github.io',
+  base: '/floorplan-AI-demo',
 });

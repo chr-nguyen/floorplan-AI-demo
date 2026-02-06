@@ -40,8 +40,6 @@ This project includes a **GitHub Actions workflow** (`.github/workflows/deploy.y
 4.  **Deploy**:
     - Just push a commit to `main`, and the "Deploy to GitHub Pages" action will run automatically.
 
-### Security Note
-Since this is a client-side demo, your `PUBLIC_FAL_KEY` will be visible in the browser network traffic. This is acceptable for personal demos, but be aware of usage limits.
 
 ## 💻 Local Development
 
