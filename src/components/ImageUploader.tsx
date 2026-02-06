@@ -30,6 +30,29 @@ interface ImageItem {
 }
 
 
+const STYLE_PRESETS = [
+  {
+    name: "Modern Minimalist",
+    prompt: "Modern minimalist interior, clean lines, white walls, light oak wood, large windows, natural light, decluttered, airy, architectural photography, 8k"
+  },
+  {
+    name: "Warm Scandinavian",
+    prompt: "Scandinavian interior design, hygge, warm lighting, cozy atmosphere, beige tones, textured fabrics, soft shadows, wooden accents, inviting, photorealistic"
+  },
+  {
+    name: "Industrial Loft",
+    prompt: "Industrial loft style, exposed brick walls, concrete floors, black metal accents, high ceilings, dramatic lighting, leather furniture, raw materials, 8k render"
+  },
+  {
+    name: "Luxury Classic",
+    prompt: "Luxury classic interior, elegant molding, crystal chandeliers, velvet furniture, gold accents, rich colors, sophisticated, magazine quality, high detail"
+  },
+  {
+    name: "Biophilic Oasis",
+    prompt: "Biophilic interior design, abundant indoor plants, green walls, natural materials, sunlight, organic shapes, peaceful, zen atmosphere, architectural digest style"
+  }
+];
+
 export default function ImageUploader() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('fal-ai/trellis');
@@ -185,14 +208,14 @@ export default function ImageUploader() {
 
       console.log("Step 6: Stylizing with Flux Dev (Stable)");
 
-      const defaultPrompt = "Architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing, photorealistic, professional, award-winning, natural lighting, sharp focus";
+      const defaultPrompt = "soft lighting, ray tracing, photorealistic, professional, award-winning, natural lighting, sharp focus. Add realistic lighting, and even out the tops of the walls to be more uniform, finally clean up the textures to look more realistic";
 
-      const prompt = image.stylizePrompt || defaultPrompt;
+      const prompt = image.stylizePrompt + ", " + defaultPrompt;
 
       const requestInput = {
         image_url: capturedStorageUrl,
         prompt: prompt,
-        strength: 0.7, // Lower strength (0.7) to prevent hallucinations and stick closer to the 3D shape
+        strength: 0.75, // Lower strength (0.7) to prevent hallucinations and stick closer to the 3D shape
         guidance_scale: 2.5,
         num_inference_steps: 40,
         enable_safety_checker: false,
@@ -221,7 +244,9 @@ export default function ImageUploader() {
     }
   };
 
-
+  const handlePromptChange = (index: number, newPrompt: string) => {
+    updateImageState(index, { stylizePrompt: newPrompt });
+  };
 
   return (
     <div className="uploader-wrapper">
@@ -271,7 +296,7 @@ export default function ImageUploader() {
                         opacity: (img.loading || img.pipelineStep === 'rerendering') ? 0.7 : 1
                       }}
                     >
-                      {img.loading ? '⏳ Generating 3D Model...' : (img.result3d ? '� Redo 3D Model' : '📦 Render to 3D Model')}
+                      {img.loading ? '⏳ Generating 3D Model...' : (img.result3d ? '🔄 Redo 3D Model' : '📦 Render to 3D Model')}
                     </button>
 
                     {/* Mask (Step 1) */}
@@ -352,6 +377,19 @@ export default function ImageUploader() {
                         <div style={{ position: 'relative' }}>
                           <img src={img.capturedUrl} className="image-preview-full" alt="Captured View" />
                         </div>
+
+                        {/* Style Presets */}
+                        {/* <div className="preset-grid">
+                          {STYLE_PRESETS.map((preset) => (
+                            <button
+                              key={preset.name}
+                              className="preset-btn"
+                              onClick={() => handlePromptChange(index, preset.prompt)}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div> */}
 
                         <textarea
                           className="prompt-textarea"

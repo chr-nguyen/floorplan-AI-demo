@@ -147,3 +147,34 @@
     transform: rotate(360deg);
   }
 }
+
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.preset-btn {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.preset-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+  border-color: #ccc;
+  transform: translateY(-1px);
+}
+
+.preset-btn:active {
+  transform: translateY(0);
+  background: #d0d0d0;
+}
