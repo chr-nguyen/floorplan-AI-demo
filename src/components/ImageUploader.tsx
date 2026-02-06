@@ -3,7 +3,6 @@ import { fal } from "@fal-ai/client";
 import ModelViewer, { type ModelViewerRef } from './ModelViewer';
 import './ImageUploader.css';
 
-// For GitHub Pages demo: Use client-side key directly
 if (!import.meta.env.PUBLIC_FAL_KEY) {
   console.error("CRITICAL: PUBLIC_FAL_KEY is missing from environment variables.");
 }
@@ -17,9 +16,8 @@ type PipelineStep = 'idle' | 'masking' | 'depth' | 'modeling' | 'rerendering' | 
 interface ImageItem {
   url: string;
   file: File;
-  loading: boolean; // General loading state
+  loading: boolean;
   result3d?: string;
-  // Floorplan specific
   pipelineStep: PipelineStep;
   maskUrl?: string;
   depthUrl?: string;
@@ -56,8 +54,12 @@ const STYLE_PRESETS = [
 export default function ImageUploader() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('fal-ai/trellis');
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
-  // Refs for ModelViewers to capture screenshots
+  const [meshyPolycount, setMeshyPolycount] = useState<number>(20000);
+  const [meshySymmetry, setMeshySymmetry] = useState<string>('off');
+  const [trellisTextureSize, setTrellisTextureSize] = useState<number>(1024);
+
   const modelViewerRefs = useRef<(ModelViewerRef | null)[]>([]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,33 +106,20 @@ export default function ImageUploader() {
     return result;
   };
 
-  /* 
-     NEW PIPELINE: Depth-Displacement
-     1. Upload specific optimized image
-     2. Get Depth Map (ZoeDepth)
-     3. Render 3D Plane with Displacement (Client-side)
-  */
   const generate3D = async (index: number) => {
     const image = images[index];
-    if (image.loading) return; // Only stop if currently loading. Allow redo if complete/idle.
+    if (image.loading) return;
 
-    // Clear previous 3D results to show spinner again (User Request: "clear that image state")
     updateImageState(index, { loading: true, pipelineStep: 'idle', result3d: undefined });
 
     try {
       const storageUrl = await fal.storage.upload(image.file);
 
-      // Step 1: ZoeDepth (Legacy support + Depth visualization)
       updateImageState(index, { pipelineStep: 'depth' });
       console.log("Step 1: Estimate Depth (ZoeDepth)");
 
-      let depthUrl = image.depthUrl; // Reuse existing depth if available? 
-      // User asked to "redo steps", but reusing depth is efficient. 
-      // However, to strictly "clear state", we should probably re-run or at least allow the UI to look fresh.
-      // Let's re-run only if missing, BUT since we want to allow "Redo", maybe we force re-run?
-      // For now, let's keep it optimized: Reuse depthURL if it exists to save time/money, unless we want to force distinct "Retry".
-      // Actually, if the depth map was bad, user might want to retry. Let's force re-run if we cleared it?
-      // I kept depthUrl in the updateImageState above (didn't clear it). So it will be reused.
+      let depthUrl = image.depthUrl;
+
 
       if (!depthUrl) {
         try {
@@ -148,14 +137,47 @@ export default function ImageUploader() {
         }
       }
 
-      // Step 2: SAM3D / Trellis (Generative 3D)
+      // Step 2: SAM3D / Trellis / Meshy (Generative 3D)
       updateImageState(index, { pipelineStep: 'modeling' });
-      console.log("Step 2: 3D Generation (Trellis)");
+      const modelName = selectedModel.includes('meshy') ? "Meshy V6" : "Trellis";
+      console.log(`Step 2: 3D Generation (${modelName})`);
 
-      const modelResult = await runFalModel(selectedModel, { image_url: storageUrl }, index, "Step 2: Final 3D Model", { logs: false });
+      // Prepare input based on model
+      const modelInput: any = { image_url: storageUrl };
+
+      if (selectedModel.includes('meshy')) {
+        // Meshy V6 Specifics
+        modelInput.enable_pbr = true;
+        modelInput.topology = "triangle"; // Default
+        modelInput.target_polycount = meshyPolycount;
+        modelInput.symmetry_mode = meshySymmetry;
+        modelInput.should_remesh = true;
+      } else {
+        // Trellis Specifics
+        modelInput.texture_size = trellisTextureSize;
+        modelInput.mesh_simplify = 0.95; // Default
+      }
+
+      console.log(`Using Params:`, modelInput);
+
+      const modelResult = await runFalModel(selectedModel, modelInput, index, `Step 2: Final 3D Model (${modelName})`, { logs: false });
+
+      console.log("Full Model Result:", JSON.stringify(modelResult, null, 2));
 
       // @ts-ignore
-      const meshUrl = modelResult.data?.model_mesh?.url || modelResult.model_mesh?.url || modelResult.images?.[0]?.url;
+      // Robust URL extraction for various models (Trellis vs Meshy)
+      const meshUrl =
+        // Direct access
+        modelResult.model_mesh?.url ||
+        modelResult.model_urls?.glb?.url ||
+        modelResult.model_glb?.url ||
+        // Wrapped in data object
+        modelResult.data?.model_mesh?.url ||
+        modelResult.data?.model_urls?.glb?.url ||
+        modelResult.data?.model_glb?.url ||
+        // Fallbacks
+        modelResult.images?.[0]?.url ||
+        modelResult.mesh?.url;
 
       if (meshUrl) {
         updateImageState(index, { loading: false, result3d: meshUrl, pipelineStep: 'complete' });
@@ -280,6 +302,90 @@ export default function ImageUploader() {
                       <img src={img.url} className="image-preview-full" alt="Original Floorplan" />
                     </div>
 
+                    {/* Model Selector */}
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <label style={{ fontSize: '0.9rem', fontWeight: 600, color: '#444', marginRight: '0.5rem' }}>3D Engine:</label>
+                      <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        disabled={img.loading || img.pipelineStep === 'rerendering'}
+                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                      >
+                        <option value="fal-ai/trellis">Trellis (Fast)</option>
+                        <option value="fal-ai/meshy/v6-preview/image-to-3d">Meshy V6 (High Quality)</option>
+                      </select>
+
+                      {/* Advanced Settings Toggle */}
+                      <button
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        style={{
+                          display: 'block',
+                          margin: '0.5rem 0 0 0',
+                          background: 'none',
+                          border: 'none',
+                          color: '#666',
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                      </button>
+
+                      {showAdvanced && (
+                        <div style={{
+                          marginTop: '0.5rem',
+                          padding: '0.8rem',
+                          background: '#f8f9fa',
+                          border: '1px solid #eee',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem'
+                        }}>
+                          {selectedModel.includes('meshy') ? (
+                            <>
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '2px', fontWeight: 500 }}>Detail (Poly Count):</label>
+                                <select
+                                  value={meshyPolycount}
+                                  onChange={(e) => setMeshyPolycount(Number(e.target.value))}
+                                  style={{ width: '100%', padding: '4px' }}
+                                >
+                                  <option value={20000}>Low (20k) - Fastest</option>
+                                  <option value={30000}>Medium (30k) - Balanced</option>
+                                  <option value={50000}>High (50k) - Best Quality</option>
+                                </select>
+                              </div>
+                              <div style={{ marginBottom: '0.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '2px', fontWeight: 500 }}>Symmetry:</label>
+                                <select
+                                  value={meshySymmetry}
+                                  onChange={(e) => setMeshySymmetry(e.target.value)}
+                                  style={{ width: '100%', padding: '4px' }}
+                                >
+                                  <option value="off">OFF (Recommended for Floorplans)</option>
+                                  <option value="auto">Auto (Default)</option>
+                                  <option value="on">Force On</option>
+                                </select>
+                                <small style={{ display: 'block', color: '#666', marginTop: '2px' }}>Force OFF prevents the AI from mirroring your room.</small>
+                              </div>
+                            </>
+                          ) : (
+                            <div>
+                              <label style={{ display: 'block', marginBottom: '2px', fontWeight: 500 }}>Texture Quality:</label>
+                              <select
+                                value={trellisTextureSize}
+                                onChange={(e) => setTrellisTextureSize(Number(e.target.value))}
+                                style={{ width: '100%', padding: '4px' }}
+                              >
+                                <option value={1024}>Standard (1024px)</option>
+                                <option value={2048}>High Res (2048px)</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => generate3D(index)}
                       disabled={img.loading || img.pipelineStep === 'rerendering'}
@@ -287,13 +393,14 @@ export default function ImageUploader() {
                         marginTop: '0.5rem',
                         fontSize: '0.9rem',
                         padding: '10px 20px',
-                        background: '#0070f3', // Distinct purple color
+                        background: selectedModel.includes('meshy') ? '#7928CA' : '#0070f3', // Purple for Meshy, Blue for Trellis
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
                         width: '100%',
-                        opacity: (img.loading || img.pipelineStep === 'rerendering') ? 0.7 : 1
+                        opacity: (img.loading || img.pipelineStep === 'rerendering') ? 0.7 : 1,
+                        transition: 'background 0.3s ease'
                       }}
                     >
                       {img.loading ? '⏳ Generating 3D Model...' : (img.result3d ? '🔄 Redo 3D Model' : '📦 Render to 3D Model')}
@@ -341,7 +448,7 @@ export default function ImageUploader() {
                                 <div className="status-text">
                                   {img.pipelineStep === 'masking' && 'Step 1/3: Analyzing Floorplan (Optimized)...'}
                                   {img.pipelineStep === 'depth' && 'Step 1/2: Generating Depth Map...'}
-                                  {img.pipelineStep === 'modeling' && 'Step 2/2: Generating 3D Mesh (Trellis)...'}
+                                  {img.pipelineStep === 'modeling' && 'Step 2/2: Generating 3D Mesh...'}
                                 </div>
                               </div>
                             )}
