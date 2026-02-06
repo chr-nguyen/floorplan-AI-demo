@@ -76,6 +76,7 @@ const ScreenshotHandler = forwardRef(({ }, ref) => {
 // -----------------------------------------------------------------------------
 const ModelViewer = forwardRef<ModelViewerRef, ModelViewerProps>(({ modelUrl, textureUrl, depthUrl, className = '' }, ref) => {
   const screenshotRef = useRef<{ capture: () => string }>(null);
+  const controlsRef = useRef<any>(null); // OrbitControls ref
 
   useImperativeHandle(ref, () => ({
     captureScreenshot: () => {
@@ -86,27 +87,170 @@ const ModelViewer = forwardRef<ModelViewerRef, ModelViewerProps>(({ modelUrl, te
     }
   }));
 
+  const handleControl = (action: string) => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const camera = controls.object; // Camera is attached to controls
+    if (!camera) return;
+
+    const angleStep = Math.PI / 16; // 18 degrees
+    const panStep = 0.10;
+    const zoomFactor = 0.1;
+
+    switch (action) {
+      case 'rotate-left':
+        controls.setAzimuthalAngle(controls.getAzimuthalAngle() + angleStep);
+        break;
+      case 'rotate-right':
+        controls.setAzimuthalAngle(controls.getAzimuthalAngle() - angleStep);
+        break;
+      case 'tilt-up':
+        controls.setPolarAngle(controls.getPolarAngle() - angleStep);
+        break;
+      case 'tilt-down':
+        controls.setPolarAngle(controls.getPolarAngle() + angleStep);
+        break;
+      case 'zoom-in':
+        if (camera.isPerspectiveCamera) {
+          const direction = new THREE.Vector3().subVectors(controls.target, camera.position).normalize();
+          camera.position.addScaledVector(direction, zoomFactor);
+        }
+        break;
+      case 'zoom-out':
+        if (camera.isPerspectiveCamera) {
+          const direction = new THREE.Vector3().subVectors(controls.target, camera.position).normalize();
+          camera.position.addScaledVector(direction, -zoomFactor);
+        }
+        break;
+      case 'pan-left':
+        const rightL = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        rightL.y = 0; rightL.normalize();
+        camera.position.addScaledVector(rightL, -panStep);
+        controls.target.addScaledVector(rightL, -panStep);
+        break;
+      case 'pan-right':
+        const rightR = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        rightR.y = 0; rightR.normalize();
+        camera.position.addScaledVector(rightR, panStep);
+        controls.target.addScaledVector(rightR, panStep);
+        break;
+      case 'pan-up':
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        up.y = 0; up.normalize();
+        camera.position.addScaledVector(up, panStep);
+        controls.target.addScaledVector(up, panStep);
+        break;
+      case 'pan-down':
+        const down = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        down.y = 0; down.normalize();
+        camera.position.addScaledVector(down, -panStep);
+        controls.target.addScaledVector(down, -panStep);
+        break;
+    }
+    controls.update();
+  };
+
   return (
-    <div className={className} style={{ width: '100%', height: '100%', minHeight: '300px', backgroundColor: '#f0f0f0', borderRadius: '8px', overflow: 'hidden', position: 'relative', zIndex: 0, pointerEvents: 'auto' }}>
-      <Canvas
-        shadows
-        camera={{ position: [0, 5, 8], fov: 45 }} // Higher camera angle for floorplans
-        gl={{ preserveDrawingBuffer: true }}
-      >
-        <Suspense fallback={<Html center><div className="spinner" style={{ margin: '0 auto' }}></div><p style={{ color: '#000', width: '40rem', textAlign: 'center' }}  >Loading 3D Model...</p></Html>}>
-          <Stage environment="city" intensity={0.6} adjustCamera={!textureUrl}> {/* Only adjust camera automatically for GLTF objects, fixed camera is better for plane */}
-            {textureUrl && depthUrl ? (
-              <DisplacementModel textureUrl={textureUrl} depthUrl={depthUrl} />
-            ) : modelUrl ? (
-              <Model url={modelUrl} />
-            ) : null}
-          </Stage>
-        </Suspense>
-        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.2} /> {/* Prevent going below ground */}
-        <ScreenshotHandler ref={screenshotRef} />
-      </Canvas >
+    <div className={className} style={{ width: '100%', height: '100%', minHeight: '300px', display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e0e0e0' }}>
+
+      {/* 3D Canvas Area */}
+      <div style={{ flex: 1, position: 'relative', backgroundColor: '#f0f0f0' }}>
+        <Canvas
+          shadows
+          camera={{ position: [0, 5, 8], fov: 45 }}
+          gl={{ preserveDrawingBuffer: true }}
+        >
+          <Suspense fallback={<Html center><div className="spinner" style={{ margin: '0 auto' }}></div></Html>}>
+            <Stage environment="city" intensity={0.6} adjustCamera={!textureUrl}>
+              {textureUrl && depthUrl ? (
+                <DisplacementModel textureUrl={textureUrl} depthUrl={depthUrl} />
+              ) : modelUrl ? (
+                <Model url={modelUrl} />
+              ) : null}
+            </Stage>
+          </Suspense>
+          <OrbitControls ref={controlsRef} makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.2} />
+          <ScreenshotHandler ref={screenshotRef} />
+        </Canvas >
+      </div>
+
+      {/* External Camera Controls */}
+      <div style={{ backgroundColor: '#fff', padding: '8px 12px', borderTop: '1px solid #eee', display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
+
+        {/* Rotate */}
+        <div style={groupStyle}>
+          <span style={labelStyle}>Rotate</span>
+          <button onClick={() => handleControl('rotate-left')} style={btnStyle} title="Rotate Left">⟲</button>
+          <button onClick={() => handleControl('rotate-right')} style={btnStyle} title="Rotate Right">⟳</button>
+        </div>
+
+        <div style={separatorStyle}></div>
+
+        {/* Tilt */}
+        <div style={groupStyle}>
+          <span style={labelStyle}>Tilt</span>
+          <button onClick={() => handleControl('tilt-up')} style={btnStyle} title="Tilt Up">↑</button>
+          <button onClick={() => handleControl('tilt-down')} style={btnStyle} title="Tilt Down">↓</button>
+        </div>
+
+        <div style={separatorStyle}></div>
+
+        {/* Pan */}
+        <div style={groupStyle}>
+          <span style={labelStyle}>Pan</span>
+          <button onClick={() => handleControl('pan-left')} style={btnStyle} title="Pan Left">⬅</button>
+          <button onClick={() => handleControl('pan-right')} style={btnStyle} title="Pan Right"><span style={{ transform: 'rotate(180deg)' }}>⬅</span></button>
+          <button onClick={() => handleControl('pan-up')} style={btnStyle} title="Pan Up">⬆</button>
+          <button onClick={() => handleControl('pan-down')} style={btnStyle} title="Pan Down">⬇</button>
+        </div>
+
+        <div style={separatorStyle}></div>
+
+        {/* Zoom */}
+        <div style={groupStyle}>
+          <span style={labelStyle}>Zoom</span>
+          <button onClick={() => handleControl('zoom-in')} style={btnStyle} title="Zoom In">＋</button>
+          <button onClick={() => handleControl('zoom-out')} style={btnStyle} title="Zoom Out">－</button>
+        </div>
+      </div>
+
     </div >
   );
 });
+
+const groupStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px'
+};
+
+const labelStyle = {
+  fontSize: '0.75rem',
+  color: '#888',
+  textTransform: 'uppercase' as const,
+  fontWeight: 600,
+  marginRight: '4px'
+};
+
+const btnStyle = {
+  width: '32px',
+  height: '32px',
+  fontSize: '16px',
+  cursor: 'pointer',
+  background: '#f8f9fa',
+  border: '1px solid #ddd',
+  borderRadius: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.1s'
+};
+
+const separatorStyle = {
+  width: '1px',
+  height: '24px',
+  background: '#eee'
+};
 
 export default ModelViewer;
