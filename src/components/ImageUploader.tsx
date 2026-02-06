@@ -70,7 +70,8 @@ export default function ImageUploader() {
         file: file,
         loading: false,
         pipelineStep: 'idle' as PipelineStep,
-        pipelineLog: []
+        pipelineLog: [],
+        stylizePrompt: "Take this dollhouse view and create a hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing"
       }));
       setImages((prev) => [...prev, ...newImages]);
     }
@@ -232,7 +233,8 @@ export default function ImageUploader() {
 
       const defaultPrompt = "soft lighting, ray tracing, photorealistic, professional, award-winning, natural lighting, sharp focus. Add realistic lighting, and even out the tops of the walls to be more uniform, finally clean up the textures to look more realistic";
 
-      const prompt = image.stylizePrompt + ", " + defaultPrompt;
+      const userPrompt = image.stylizePrompt || "";
+      const prompt = userPrompt ? `${userPrompt}, ${defaultPrompt}` : defaultPrompt;
 
       const requestInput = {
         image_url: capturedStorageUrl,
@@ -501,7 +503,7 @@ export default function ImageUploader() {
                         <textarea
                           className="prompt-textarea"
                           placeholder="Enter stylization prompt (e.g. 'Modern interior, sunny day')..."
-                          value={img.stylizePrompt || "Take this dollhouse view and create a hyper-realistic architectural photography, interior design masterpiece, 8k, highly detailed, soft lighting, ray tracing"}
+                          value={img.stylizePrompt}
                           onChange={(e) => updateImageState(index, { stylizePrompt: e.target.value })}
                         />
 
