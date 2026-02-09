@@ -140,7 +140,7 @@ export default function ImageUploader() {
 
       // Step 2: SAM3D / Trellis / Meshy (Generative 3D)
       updateImageState(index, { pipelineStep: 'modeling' });
-      const modelName = selectedModel.includes('meshy') ? "Meshy V6" : "Trellis";
+      const modelName = selectedModel.includes('meshy') ? "Meshy V6" : "trellis-2";
       console.log(`Step 2: 3D Generation (${modelName})`);
 
       // Prepare input based on model
