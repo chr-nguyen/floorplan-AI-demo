@@ -15,6 +15,39 @@ interface ModelViewerProps {
 }
 
 // -----------------------------------------------------------------------------
+// Error Boundary for Model Loading
+// -----------------------------------------------------------------------------
+class ModelErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ModelViewer Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Html center>
+          <div style={{ color: 'red', textAlign: 'center', background: 'rgba(255,255,255,0.9)', padding: '10px', borderRadius: '4px' }}>
+            <p><strong>Error loading model</strong></p>
+            <p style={{ fontSize: '0.8em' }}>{this.state.error?.message}</p>
+          </div>
+        </Html>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Legacy GLTF Model Component
 // -----------------------------------------------------------------------------
 function Model({ url }: { url: string }) {
@@ -163,11 +196,13 @@ const ModelViewer = forwardRef<ModelViewerRef, ModelViewerProps>(({ modelUrl, te
         >
           <Suspense fallback={<Html center><div className="spinner" style={{ margin: '0 auto' }}></div></Html>}>
             <Stage environment="city" intensity={0.6} adjustCamera={!textureUrl}>
-              {textureUrl && depthUrl ? (
-                <DisplacementModel textureUrl={textureUrl} depthUrl={depthUrl} />
-              ) : modelUrl ? (
-                <Model url={modelUrl} />
-              ) : null}
+              <ModelErrorBoundary>
+                {textureUrl && depthUrl ? (
+                  <DisplacementModel textureUrl={textureUrl} depthUrl={depthUrl} />
+                ) : modelUrl ? (
+                  <Model url={modelUrl} />
+                ) : null}
+              </ModelErrorBoundary>
             </Stage>
           </Suspense>
           <OrbitControls ref={controlsRef} makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.2} />
