@@ -10,6 +10,7 @@ interface ImageItem {
   originalFile: File;
   enhancedUrl?: string; // URL of the enhanced 2D image
   enhancementPrompt?: string; // Custom user prompt for enhancement
+  modelPrompt?: string;
   screenshotData?: string; // Data URL of the captured screenshot
   finalRenderUrl?: string; // URL of the enhanced photorealistic render
   loading: boolean;
@@ -164,7 +165,7 @@ export default function ImageUploader() {
         should_remesh: true,
         // User requested prompt for taller walls. 
         // Note: 'prompt' or 'refine_prompt' support varies by model version, but adding it as requested.
-        prompt: "Realistic home interior, tall walls 10ft high relative to furniture, continuous walls above windows, high ceilings.",
+        prompt: "Realistic home interior, tall walls 10ft high relative to furniture, continuous walls above windows, high ceilings." + image.modelPrompt,
         texture_prompt: "Realistic interior textures, clear walls, high quality home finishing."
       };
 
@@ -405,7 +406,7 @@ export default function ImageUploader() {
                                   <option value={50000}>High (50k)</option>
                                 </select>
                               </div>
-
+                              {/* 
                               <button
                                 onClick={() => setShowAdvanced(!showAdvanced)}
                                 style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0070f3', cursor: 'pointer', padding: 0, marginBottom: '10px' }}
@@ -428,7 +429,15 @@ export default function ImageUploader() {
                                   </select>
                                 </div>
 
-                              )}
+                              )} */}
+                              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Model Options</label>
+                              <input
+                                type="text"
+                                placeholder="Prompts for 3D model render"
+                                value={img.modelPrompt || ''}
+                                onChange={(e) => updateImageState(index, { modelPrompt: e.target.value })}
+                                style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                              />
 
                               <button
                                 onClick={() => callMeshyAPI(index)}
