@@ -53,13 +53,18 @@ export const GET: APIRoute = async ({ request }) => {
 
   const url = new URL(request.url);
   const taskId = url.searchParams.get('taskId');
-
-  if (!taskId) {
-    return new Response(JSON.stringify({ error: "Missing taskId" }), { status: 400 });
-  }
+  const pageNum = url.searchParams.get('page_num') || '1';
+  const pageSize = url.searchParams.get('page_size') || '10';
 
   try {
-    const response = await fetch(`https://api.meshy.ai/v1/image-to-3d/${taskId}`, {
+    let meshyUrl = `https://api.meshy.ai/v1/image-to-3d/${taskId}`;
+
+    if (!taskId) {
+      // Fetch history if no taskId is provided
+      meshyUrl = `https://api.meshy.ai/v1/image-to-3d?page_num=${pageNum}&page_size=${pageSize}`;
+    }
+
+    const response = await fetch(meshyUrl, {
       headers: {
         "Authorization": `Bearer ${MESHY_API_KEY}`
       }

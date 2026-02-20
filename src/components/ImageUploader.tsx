@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import ModelViewer, { type ModelViewerRef } from './ModelViewer';
 import './ImageUploader.css';
@@ -19,10 +19,13 @@ interface ImageItem {
   pipelineLog?: string[];
   meshyTaskId?: string;
   selectedAction?: 'enhance' | '3d';
+  isHistoryItem?: boolean;
 }
 
 export default function ImageUploader() {
   const [images, setImages] = useState<ImageItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Meshy Configuration
   const [meshyPolycount, setMeshyPolycount] = useState<number>(30000);
@@ -41,9 +44,57 @@ export default function ImageUploader() {
         pipelineStep: 'idle' as PipelineStep,
         pipelineLog: [],
       }));
-      setImages((prev) => [...prev, ...newImages]);
+      setImages(newImages.slice(0, 1));
     }
   }, []);
+
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch("/api/meshy");
+      if (response.ok) {
+        const data = await response.json();
+        // Meshy v1 history is usually an array of tasks
+        setHistoryItems(data.slice(0, 10));
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const loadFromHistory = (item: any) => {
+    const modelUrl = item.model_urls?.glb;
+    if (!modelUrl) return;
+
+    const proxiedUrl = `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`;
+
+    // Priority: generated thumbnail > original input image > base texture
+    const displayUrl = item.thumbnail_url || item.image_url || item.texture_urls?.base_color || "";
+
+    const newItem: ImageItem = {
+      url: displayUrl,
+      originalFile: new File([], "history-item"), // Dummy file
+      result3d: proxiedUrl,
+      pipelineStep: 'complete',
+      pipelineLog: ['Loaded from history'],
+      loading: false,
+      selectedAction: '3d',
+      isHistoryItem: true
+    };
+
+    setImages([newItem]);
+
+    // Smooth scroll to results
+    setTimeout(() => {
+      window.scrollTo({ top: document.querySelector('.results-list')?.getBoundingClientRect().top ?? 0 + window.scrollY, behavior: 'smooth' });
+    }, 100);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -304,147 +355,149 @@ export default function ImageUploader() {
 
   return (
     <div className="uploader-wrapper">
-      <div className="uploader-container">
+      <div className="main-layout">
+        <div className="uploader-container">
 
-        {/* Drag & Drop Zone */}
-        <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{
-          border: '2px dashed #ccc',
-          borderRadius: '10px',
-          padding: '40px',
-          textAlign: 'center',
-          backgroundColor: isDragActive ? '#f0f8ff' : '#fafafa',
-          cursor: 'pointer',
-          marginBottom: '20px',
-          transition: 'all 0.2s ease'
-        }}>
-          <input {...getInputProps()} />
-          {isDragActive ? (
-            <p style={{ fontSize: '1.2rem', color: '#0070f3' }}>Drop the floorplan here ...</p>
-          ) : (
-            <div>
-              <p style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Drag & drop floorplan here</p>
-              <p style={{ color: '#888' }}>or click to select files</p>
-            </div>
-          )}
-        </div>
+          {/* Drag & Drop Zone */}
+          <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{
+            border: '2px dashed #ccc',
+            borderRadius: '10px',
+            padding: '40px',
+            textAlign: 'center',
+            backgroundColor: isDragActive ? '#f0f8ff' : '#fafafa',
+            cursor: 'pointer',
+            marginBottom: '20px',
+            transition: 'all 0.2s ease'
+          }}>
+            <input {...getInputProps()} />
+            {isDragActive ? (
+              <p style={{ fontSize: '1.2rem', color: '#0070f3' }}>Drop the floorplan here ...</p>
+            ) : (
+              <div>
+                <p style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Drag & drop floorplan here</p>
+                <p style={{ color: '#888' }}>or click to select files</p>
+              </div>
+            )}
+          </div>
 
 
-        {images.length > 0 && (
-          <div className="results-list">
-            {images.map((img, index) => (
-              <div key={index} className="result-row">
+          {images.length > 0 && (
+            <div className="results-list">
+              {images.map((img, index) => (
+                <div key={index} className="result-row">
 
-                {/* Status Bar */}
-                <div style={{ width: '100%', marginBottom: '1rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                  <strong>Status:</strong> {img.pipelineStep.toUpperCase()}
-                  {img.pipelineLog && img.pipelineLog.length > 0 && (
-                    <span style={{ marginLeft: '10px', color: '#666', fontSize: '0.9em' }}>
-                      - {img.pipelineLog[img.pipelineLog.length - 1]}
-                    </span>
-                  )}
-                </div>
+                  {/* Status Bar */}
+                  <div style={{ width: '100%', marginBottom: '1rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
+                    <strong>Status:</strong> {img.pipelineStep.toUpperCase()}
+                    {img.pipelineLog && img.pipelineLog.length > 0 && (
+                      <span style={{ marginLeft: '10px', color: '#666', fontSize: '0.9em' }}>
+                        - {img.pipelineLog[img.pipelineLog.length - 1]}
+                      </span>
+                    )}
+                  </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
-                  {/* STEP 1: Input & Enhancement */}
-                  <div style={{ width: '100%' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444', fontSize: '1.2rem' }}>
-                      1. Floorplan Input
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                      {/* Image Previews Column */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                        {/* Original Image */}
-                        <div style={{ position: 'relative', minHeight: '500px', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', overflow: 'hidden' }}>
-                          <span style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '0.8rem' }}>Original</span>
-                          <img
-                            src={img.url}
-                            alt="Original Floorplan"
-                            style={{ maxHeight: '500px', maxWidth: '100%', objectFit: 'contain' }}
-                          />
+                    {/* STEP 1: Input & Enhancement */}
+                    {!img.isHistoryItem && (
+                      <div style={{ width: '100%' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444', fontSize: '1.2rem' }}>
+                          1. Floorplan Input
                         </div>
 
-                        {!img.result3d && !img.enhancedUrl && (
-                          <div style={{ marginBottom: '20px', padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                            {(!img.selectedAction || img.selectedAction === 'enhance') && (
-                              <>
-                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Enhance Options</label>
-                                <input
-                                  type="text"
-                                  placeholder="Instructions (e.g. 'Remove furniture')"
-                                  value={img.enhancementPrompt || ''}
-                                  onChange={(e) => updateImageState(index, { enhancementPrompt: e.target.value })}
-                                  style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-                                />
-                                <button
-                                  onClick={() => handleEnhanceImage(index)}
-                                  disabled={img.loading}
-                                  style={{ width: '100%', padding: '10px', background: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}
-                                >
-                                  {img.loading && img.pipelineStep === 'enhancing' ? (
-                                    <>
-                                      Enhancing...
-                                    </>
-                                  ) : (
-                                    <>✨ Enhance Image</>
-                                  )}
-                                </button>
-                              </>
-                            )}
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                          {/* Image Previews Column */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                            {(!img.selectedAction || img.selectedAction === '3d') && (
-                              <button
-                                onClick={() => callMeshyAPI(index, true)}
-                                disabled={img.loading}
-                                style={{
-                                  width: '100%',
-                                  padding: '12px',
-                                  background: '#7928CA',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  fontSize: '1rem',
-                                  fontWeight: 'bold',
-                                  cursor: img.loading ? 'wait' : 'pointer',
-                                  opacity: img.loading ? 0.7 : 1
-                                }}
-                              >
-                                {img.loading ? 'Generating...' : (img.result3d ? 'Regenerate 3D' : 'Generate 3D Model')}
-                              </button>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Enhanced Image (Below) */}
-                        {img.enhancedUrl && (
-                          <>
-                            <div style={{ position: 'relative', minHeight: '500px', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', overflow: 'hidden', border: '4px solid #0070f3' }}>
-                              <span style={{ position: 'absolute', top: 10, left: 10, background: '#0070f3', color: 'white', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem' }}>Enhanced (AI)</span>
+                            {/* Original Image */}
+                            <div style={{ position: 'relative', minHeight: '500px', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', overflow: 'hidden' }}>
+                              <span style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '0.8rem' }}>Original</span>
                               <img
-                                src={img.enhancedUrl}
-                                alt="Enhanced Floorplan"
+                                src={img.url}
+                                alt="Original Floorplan"
                                 style={{ maxHeight: '500px', maxWidth: '100%', objectFit: 'contain' }}
                               />
                             </div>
-                            <div style={{ background: '#f9f9f9', padding: '1rem', borderRadius: '8px', border: '1px solid #eee' }}>
-                              <div style={{ marginBottom: '0.5rem', fontWeight: 600 }}>3D Generation Settings</div>
 
-                              <div style={{ marginBottom: '10px' }}>
-                                <label style={{ fontSize: '0.9rem', display: 'block' }}>Quality:</label>
-                                <select
-                                  disabled={img.loading}
-                                  value={meshyPolycount}
-                                  onChange={(e) => setMeshyPolycount(Number(e.target.value))}
-                                  style={{ padding: '6px', width: '100%' }}
-                                >
-                                  <option value={20000}>Low (20k)</option>
-                                  <option value={30000}>Medium (30k)</option>
-                                  <option value={50000}>High (50k)</option>
-                                </select>
+                            {!img.result3d && !img.enhancedUrl && (
+                              <div style={{ marginBottom: '20px', padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
+                                {(!img.selectedAction || img.selectedAction === 'enhance') && (
+                                  <>
+                                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Enhance Options</label>
+                                    <input
+                                      type="text"
+                                      placeholder="Instructions (e.g. 'Remove furniture')"
+                                      value={img.enhancementPrompt || ''}
+                                      onChange={(e) => updateImageState(index, { enhancementPrompt: e.target.value })}
+                                      style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                    />
+                                    <button
+                                      onClick={() => handleEnhanceImage(index)}
+                                      disabled={img.loading}
+                                      style={{ width: '100%', padding: '10px', background: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}
+                                    >
+                                      {img.loading && img.pipelineStep === 'enhancing' ? (
+                                        <>
+                                          Enhancing...
+                                        </>
+                                      ) : (
+                                        <>✨ Enhance Image</>
+                                      )}
+                                    </button>
+                                  </>
+                                )}
+
+                                {(!img.selectedAction || img.selectedAction === '3d') && (
+                                  <button
+                                    onClick={() => callMeshyAPI(index, true)}
+                                    disabled={img.loading}
+                                    style={{
+                                      width: '100%',
+                                      padding: '12px',
+                                      background: '#7928CA',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '1rem',
+                                      fontWeight: 'bold',
+                                      cursor: img.loading ? 'wait' : 'pointer',
+                                      opacity: img.loading ? 0.7 : 1
+                                    }}
+                                  >
+                                    {img.loading ? 'Generating...' : (img.result3d ? 'Regenerate 3D' : 'Generate 3D Model')}
+                                  </button>
+                                )}
                               </div>
-                              {/* 
+                            )}
+
+                            {/* Enhanced Image (Below) */}
+                            {img.enhancedUrl && (
+                              <>
+                                <div style={{ position: 'relative', minHeight: '500px', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', overflow: 'hidden', border: '4px solid #0070f3' }}>
+                                  <span style={{ position: 'absolute', top: 10, left: 10, background: '#0070f3', color: 'white', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem' }}>Enhanced (AI)</span>
+                                  <img
+                                    src={img.enhancedUrl}
+                                    alt="Enhanced Floorplan"
+                                    style={{ maxHeight: '500px', maxWidth: '100%', objectFit: 'contain' }}
+                                  />
+                                </div>
+                                <div style={{ background: '#f9f9f9', padding: '1rem', borderRadius: '8px', border: '1px solid #eee' }}>
+                                  <div style={{ marginBottom: '0.5rem', fontWeight: 600 }}>3D Generation Settings</div>
+
+                                  <div style={{ marginBottom: '10px' }}>
+                                    <label style={{ fontSize: '0.9rem', display: 'block' }}>Quality:</label>
+                                    <select
+                                      disabled={img.loading}
+                                      value={meshyPolycount}
+                                      onChange={(e) => setMeshyPolycount(Number(e.target.value))}
+                                      style={{ padding: '6px', width: '100%' }}
+                                    >
+                                      <option value={20000}>Low (20k)</option>
+                                      <option value={30000}>Medium (30k)</option>
+                                      <option value={50000}>High (50k)</option>
+                                    </select>
+                                  </div>
+                                  {/* 
                               <button
                                 onClick={() => setShowAdvanced(!showAdvanced)}
                                 style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: '#0070f3', cursor: 'pointer', padding: 0, marginBottom: '10px' }}
@@ -468,168 +521,219 @@ export default function ImageUploader() {
                                 </div>
 
                               )} */}
-                              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Model Options</label>
-                              <input
-                                type="text"
-                                placeholder="Prompts for 3D model render"
-                                value={img.modelPrompt || ''}
-                                onChange={(e) => updateImageState(index, { modelPrompt: e.target.value })}
-                                style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-                              />
+                                  <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Model Options</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Prompts for 3D model render"
+                                    value={img.modelPrompt || ''}
+                                    onChange={(e) => updateImageState(index, { modelPrompt: e.target.value })}
+                                    style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                  />
 
+                                  <button
+                                    onClick={() => callMeshyAPI(index)}
+                                    disabled={img.loading}
+                                    style={{
+                                      width: '100%',
+                                      padding: '12px',
+                                      background: '#7928CA',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      fontSize: '1rem',
+                                      fontWeight: 'bold',
+                                      cursor: img.loading ? 'wait' : 'pointer',
+                                      opacity: img.loading ? 0.7 : 1
+                                    }}
+                                  >
+                                    {img.loading ? 'Generating...' : (img.result3d ? 'Regenerate 3D' : 'Generate 3D Model')}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+
+                            {/* Controls Sidebar for Step 1 */}
+
+
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STEP 2: 3D Viewer */}
+                    {(img.enhancedUrl || img.selectedAction === '3d') && (
+                      <div style={{ width: '100%' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444', fontSize: '1.2rem' }}>2. 3D Model Interaction</div>
+
+                        <div className="model-viewer-wrapper" style={{ aspectRatio: '4 / 3', background: '#e0e0e0', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
+                          {img.result3d ? (
+                            <>
+                              <ModelViewer
+                                ref={el => { modelViewerRefs.current[index] = el; }}
+                                modelUrl={img.result3d}
+                              />
+                              <div style={{ position: 'absolute', bottom: '50px', right: '20px', zIndex: 10 }}>
+                                <button
+                                  onClick={() => handleCaptureScreenshot(index)}
+                                  style={{
+                                    padding: '12px 20px',
+                                    background: 'rgba(0,0,0,0.8)',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    fontSize: '1rem',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                                  }}
+                                >
+                                  📸 Take Screenshot for Render
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#888'
+                            }}>
+                              {img.loading && img.pipelineStep !== 'enhancing' ? (
+                                <>
+                                  <div className="spinner"></div>
+                                  <p style={{ marginTop: '10px' }}>{img.pipelineLog?.[img.pipelineLog.length - 1] || 'Processing...'}</p>
+                                </>
+                              ) : (
+                                <p>Generate 3D model to view here.</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Capture Button */}
+
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STEP 3: Captured View & Final Render */}
+                    {img.screenshotData && (
+                      <div id={`screenshot-section-${index}`} style={{ width: '100%', borderTop: '2px solid #eee', paddingTop: '20px' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '1rem', color: '#444', fontSize: '1.2rem' }}>3. Photorealistic Rendering</div>
+
+                        <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column' }}>
+                          {/* Captured Screenshot */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#666', marginBottom: '10px' }}>Captured View</div>
+                            <img src={img.screenshotData} style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
+
+                            <div style={{ marginTop: '15px' }}>
                               <button
-                                onClick={() => callMeshyAPI(index)}
+                                onClick={() => handlePhotorealisticRender(index)}
                                 disabled={img.loading}
                                 style={{
                                   width: '100%',
-                                  padding: '12px',
-                                  background: '#7928CA',
-                                  color: 'white',
+                                  padding: '15px',
+                                  background: 'linear-gradient(135deg, #FFD700, #FDB931)',
+                                  color: 'black',
+                                  fontWeight: 'bold',
+                                  fontSize: '1.1rem',
                                   border: 'none',
-                                  borderRadius: '6px',
-                                  fontSize: '1rem',
-                                  fontWeight: 'bold',
-                                  cursor: img.loading ? 'wait' : 'pointer',
-                                  opacity: img.loading ? 0.7 : 1
-                                }}
-                              >
-                                {img.loading ? 'Generating...' : (img.result3d ? 'Regenerate 3D' : 'Generate 3D Model')}
-                              </button>
-                            </div>
-                          </>
-                        )}
-
-
-                        {/* Controls Sidebar for Step 1 */}
-
-
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* STEP 2: 3D Viewer */}
-                  {(img.enhancedUrl || img.selectedAction === '3d') && (
-                    <div style={{ width: '100%' }}>
-                      <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444', fontSize: '1.2rem' }}>2. 3D Model Interaction</div>
-
-                      <div className="model-viewer-wrapper" style={{ aspectRatio: '4 / 3', background: '#e0e0e0', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
-                        {img.result3d ? (
-                          <>
-                            <ModelViewer
-                              ref={el => { modelViewerRefs.current[index] = el; }}
-                              modelUrl={img.result3d}
-                            />
-                            <div style={{ position: 'absolute', bottom: '20px', right: '20px', zIndex: 10 }}>
-                              <button
-                                onClick={() => handleCaptureScreenshot(index)}
-                                style={{
-                                  padding: '12px 20px',
-                                  background: 'rgba(0,0,0,0.8)',
-                                  color: 'white',
-                                  fontWeight: 'bold',
-                                  fontSize: '1rem',
-                                  border: '1px solid rgba(255,255,255,0.3)',
                                   borderRadius: '8px',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                                  cursor: img.loading ? 'wait' : 'pointer',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                  boxShadow: '0 4px 12px rgba(255, 215, 0, 0.4)',
+                                  transition: 'transform 0.1s'
                                 }}
                               >
-                                📸 Take Screenshot for Render
+                                {img.loading && img.pipelineStep === 'enhancing' ? (
+                                  <>
+                                    <div className="spinner" style={{ width: '20px', height: '20px', borderTopColor: '#000', borderLeftColor: '#000' }}></div>
+                                    Generating Render...
+                                  </>
+                                ) : (
+                                  <>🎨 Generate Photorealistic Render</>
+                                )}
                               </button>
                             </div>
-                          </>
-                        ) : (
-                          <div style={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#888'
-                          }}>
-                            {img.loading && img.pipelineStep !== 'enhancing' ? (
-                              <>
-                                <div className="spinner"></div>
-                                <p style={{ marginTop: '10px' }}>{img.pipelineLog?.[img.pipelineLog.length - 1] || 'Processing...'}</p>
-                              </>
-                            ) : (
-                              <p>Generate 3D model to view here.</p>
-                            )}
                           </div>
-                        )}
 
-                        {/* Capture Button */}
-
-                      </div>
-                    </div>
-                  )}
-
-                  {/* STEP 3: Captured View & Final Render */}
-                  {img.screenshotData && (
-                    <div id={`screenshot-section-${index}`} style={{ width: '100%', borderTop: '2px solid #eee', paddingTop: '20px' }}>
-                      <div style={{ fontWeight: 'bold', marginBottom: '1rem', color: '#444', fontSize: '1.2rem' }}>3. Photorealistic Rendering</div>
-
-                      <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column' }}>
-                        {/* Captured Screenshot */}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#666', marginBottom: '10px' }}>Captured View</div>
-                          <img src={img.screenshotData} style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
-
-                          <div style={{ marginTop: '15px' }}>
-                            <button
-                              onClick={() => handlePhotorealisticRender(index)}
-                              disabled={img.loading}
-                              style={{
-                                width: '100%',
-                                padding: '15px',
-                                background: 'linear-gradient(135deg, #FFD700, #FDB931)',
-                                color: 'black',
-                                fontWeight: 'bold',
-                                fontSize: '1.1rem',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: img.loading ? 'wait' : 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                                boxShadow: '0 4px 12px rgba(255, 215, 0, 0.4)',
-                                transition: 'transform 0.1s'
-                              }}
-                            >
-                              {img.loading && img.pipelineStep === 'enhancing' ? (
-                                <>
-                                  <div className="spinner" style={{ width: '20px', height: '20px', borderTopColor: '#000', borderLeftColor: '#000' }}></div>
-                                  Generating Render...
-                                </>
-                              ) : (
-                                <>🎨 Generate Photorealistic Render</>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Final Render Result */}
-                        {img.finalRenderUrl && (
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0070f3', marginBottom: '10px' }}>Final Result</div>
-                            <a href={img.finalRenderUrl} download={`render-${Date.now()}.png`}>
-                              <img src={img.finalRenderUrl} style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px', border: '4px solid #FFD700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} title="Click to download" />
-                            </a>
-                            <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.9rem', color: '#888' }}>
-                              Click image to download high-res version
+                          {/* Final Render Result */}
+                          {img.finalRenderUrl && (
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0070f3', marginBottom: '10px' }}>Final Result</div>
+                              <a href={img.finalRenderUrl} download={`render-${Date.now()}.png`}>
+                                <img src={img.finalRenderUrl} style={{ width: '100%', maxHeight: '600px', objectFit: 'contain', borderRadius: '8px', border: '4px solid #FFD700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} title="Click to download" />
+                              </a>
+                              <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.9rem', color: '#888' }}>
+                                Click image to download high-res version
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* History Sidebar */}
+        <div className="history-sidebar">
+          <div className="history-title">Recent 3D Designs</div>
+          <div className="history-list">
+            {loadingHistory && historyItems.length === 0 ? (
+              <div className="history-empty">Loading...</div>
+            ) : historyItems.length > 0 ? (
+              historyItems.map((item, idx) => (
+                <div
+                  key={item.id}
+                  className="history-item-container"
+                  onClick={() => loadFromHistory(item)}
+                >
+                  <div className="history-item" title={`Created: ${new Date(item.created_at).toLocaleString()}`}>
+                    {item.thumbnail_url || item.image_url || item.texture_urls?.base_color ? (
+                      <img src={item.thumbnail_url || item.image_url || item.texture_urls.base_color} alt="Thumbnail" />
+                    ) : (
+                      <div style={{ fontSize: '0.7rem', color: '#aaa' }}>3D</div>
+                    )}
+                    <div className={`status-indicator ${item.status === 'SUCCEEDED' ? 'complete' : ''}`}></div>
+                  </div>
+                  <div className="history-item-date">
+                    {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    <br />
+                    {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="history-empty">No history found.</div>
+            )}
           </div>
-        )}
+          <button
+            onClick={fetchHistory}
+            disabled={loadingHistory}
+            style={{
+              marginTop: '1rem',
+              fontSize: '0.75rem',
+              background: 'none',
+              border: 'none',
+              color: '#0070f3',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            Refresh History
+          </button>
+        </div>
       </div>
     </div >
   );
