@@ -191,7 +191,7 @@ const ModelViewer = forwardRef<ModelViewerRef, ModelViewerProps>(({ modelUrl, te
       <div style={{ flex: 1, position: 'relative', backgroundColor: '#f0f0f0' }}>
         <Canvas
           shadows
-          camera={{ position: [0, 5, 8], fov: 45 }}
+          camera={{ position: [0, 5, 8], fov: 60 }}
           gl={{ preserveDrawingBuffer: true }}
         >
           <Suspense fallback={<Html center><div className="spinner" style={{ margin: '0 auto' }}></div></Html>}>

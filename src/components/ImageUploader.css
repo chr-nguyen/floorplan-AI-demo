@@ -95,7 +95,7 @@
 
 .model-viewer-wrapper {
   width: 100%;
-  height: 500px;
+  aspect-ratio: 4 / 3;
   background: #eef;
   border-radius: 8px;
   overflow: hidden;

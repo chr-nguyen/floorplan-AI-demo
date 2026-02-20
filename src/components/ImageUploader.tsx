@@ -18,6 +18,7 @@ interface ImageItem {
   pipelineStep: PipelineStep;
   pipelineLog?: string[];
   meshyTaskId?: string;
+  selectedAction?: 'enhance' | '3d';
 }
 
 export default function ImageUploader() {
@@ -92,7 +93,12 @@ export default function ImageUploader() {
     const image = images[index];
     if (!image) return;
 
-    updateImageState(index, { loading: true, pipelineStep: 'enhancing', pipelineLog: ['Enhancing image...'] });
+    updateImageState(index, {
+      loading: true,
+      pipelineStep: 'enhancing',
+      pipelineLog: ['Enhancing image...'],
+      selectedAction: 'enhance'
+    });
 
     try {
       const base64Image = await fileToBase64(image.originalFile);
@@ -137,16 +143,23 @@ export default function ImageUploader() {
   // ---------------------------------------------------------------------------
   // 2. Meshy: Generate 3D
   // ---------------------------------------------------------------------------
-  const callMeshyAPI = async (index: number) => {
+  const callMeshyAPI = async (index: number, skipEnhance: boolean = false) => {
     const image = images[index];
     if (!image) return;
 
-    updateImageState(index, { loading: true, pipelineStep: 'uploading', result3d: undefined, pipelineLog: ['Preparing upload...'] });
+    updateImageState(index, {
+      loading: true,
+      pipelineStep: 'uploading',
+      result3d: undefined,
+      pipelineLog: ['Preparing upload...'],
+      // Only set selectedAction if it's not already set (e.g. from enhance)
+      ...(images[index].selectedAction ? {} : { selectedAction: '3d' })
+    });
 
     try {
       // USE ENHANCED IMAGE IF AVAILABLE, OTHERWISE ORIGINAL
       let base64Image;
-      if (image.enhancedUrl) {
+      if (image.enhancedUrl && !skipEnhance) {
         console.log("Using Enhanced Image for 3D Generation");
         base64Image = await urlToBase64(image.enhancedUrl);
       } else {
@@ -355,27 +368,52 @@ export default function ImageUploader() {
 
                         {!img.result3d && !img.enhancedUrl && (
                           <div style={{ marginBottom: '20px', padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Enhance Options</label>
-                            <input
-                              type="text"
-                              placeholder="Instructions (e.g. 'Remove furniture')"
-                              value={img.enhancementPrompt || ''}
-                              onChange={(e) => updateImageState(index, { enhancementPrompt: e.target.value })}
-                              style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-                            />
-                            <button
-                              onClick={() => handleEnhanceImage(index)}
-                              disabled={img.loading}
-                              style={{ width: '100%', padding: '10px', background: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                            >
-                              {img.loading && img.pipelineStep === 'enhancing' ? (
-                                <>
-                                  Enhancing...
-                                </>
-                              ) : (
-                                <>✨ Enhance Image</>
-                              )}
-                            </button>
+                            {(!img.selectedAction || img.selectedAction === 'enhance') && (
+                              <>
+                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Enhance Options</label>
+                                <input
+                                  type="text"
+                                  placeholder="Instructions (e.g. 'Remove furniture')"
+                                  value={img.enhancementPrompt || ''}
+                                  onChange={(e) => updateImageState(index, { enhancementPrompt: e.target.value })}
+                                  style={{ width: '90%', marginBottom: '10px', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                />
+                                <button
+                                  onClick={() => handleEnhanceImage(index)}
+                                  disabled={img.loading}
+                                  style={{ width: '100%', padding: '10px', background: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}
+                                >
+                                  {img.loading && img.pipelineStep === 'enhancing' ? (
+                                    <>
+                                      Enhancing...
+                                    </>
+                                  ) : (
+                                    <>✨ Enhance Image</>
+                                  )}
+                                </button>
+                              </>
+                            )}
+
+                            {(!img.selectedAction || img.selectedAction === '3d') && (
+                              <button
+                                onClick={() => callMeshyAPI(index, true)}
+                                disabled={img.loading}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px',
+                                  background: '#7928CA',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontSize: '1rem',
+                                  fontWeight: 'bold',
+                                  cursor: img.loading ? 'wait' : 'pointer',
+                                  opacity: img.loading ? 0.7 : 1
+                                }}
+                              >
+                                {img.loading ? 'Generating...' : (img.result3d ? 'Regenerate 3D' : 'Generate 3D Model')}
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -470,11 +508,11 @@ export default function ImageUploader() {
                   </div>
 
                   {/* STEP 2: 3D Viewer */}
-                  {img.enhancedUrl && (
+                  {(img.enhancedUrl || img.selectedAction === '3d') && (
                     <div style={{ width: '100%' }}>
                       <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#444', fontSize: '1.2rem' }}>2. 3D Model Interaction</div>
 
-                      <div className="model-viewer-wrapper" style={{ minHeight: '500px', height: '600px', background: '#e0e0e0', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
+                      <div className="model-viewer-wrapper" style={{ aspectRatio: '4 / 3', background: '#e0e0e0', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
                         {img.result3d ? (
                           <>
                             <ModelViewer
@@ -593,7 +631,7 @@ export default function ImageUploader() {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 }
 
