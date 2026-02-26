@@ -229,7 +229,7 @@ export default function ImageUploader() {
         should_remesh: true,
         // User requested prompt for taller walls. 
         // Note: 'prompt' or 'refine_prompt' support varies by model version, but adding it as requested.
-        prompt: "Realistic home interior, tall walls 10ft high relative to furniture, continuous walls above windows, high ceilings." + image.modelPrompt,
+        prompt: "Realistic home interior, tall walls 10ft high relative to furniture, continuous walls above windows, high ceilings. Do not use shadows to orient the model. The view is always from the top looking down at the floor. Always have the floor be on the X Z plane, and the walls along Y axis. The floor is always on the bottom" + image.modelPrompt,
         texture_prompt: "Realistic interior textures, clear walls, high quality home finishing."
       };
 
