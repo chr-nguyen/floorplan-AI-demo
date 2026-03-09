@@ -1,4 +1,3 @@
-
 import type { APIRoute } from 'astro';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -17,15 +16,25 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: "Missing image data" }), { status: 400 });
     }
 
-    // Initialize Gemini
-    // Using the same model as the enhancement step for consistency
     const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
     const model = genAI.getGenerativeModel({ model: "nano-banana-pro-preview" });
 
     const base64Data = image.split(',')[1] || image;
 
-    // Prompt specifically for photorealistic rendering of the 3D screenshot
-    const prompt = "Generate a photorealistic version of this 3D model screenshot. Make it look like a real photograph taken inside the room. Improve lighting, textures, and shadows to be highly realistic. Maintain the perspective and layout exactly. Add a plain smooth white ceiling that closes off the top of the room — the ceiling should look natural and flat as if photographed from inside the space, with subtle ambient lighting from above. Return ONLY the image.";
+    const prompt = `Convert this top-down floor plan into a photorealistic isometric 3D architectural rendering viewed from a 45-degree angle above.
+
+Requirements:
+- Show FULL 10-foot wall height from floor to ceiling on all walls
+- Above every door opening: include at least 2 feet of solid wall between the top of the door frame and the ceiling
+- Above every window: include at least 2 feet of solid wall between the top of the window frame and the ceiling — windows must NOT extend to the ceiling
+- Windows should be positioned mid-wall height, not flush with ceiling
+- No roof — leave the ceiling open so the interior layout is visible from above
+- Show all room divisions, corridors, and wall intersections clearly
+- Keep all furniture, fixtures, and interior objects exactly as shown in the original floor plan
+- White matte walls, light concrete or hardwood floors
+- Clean, bright rendering style with no shadows obscuring wall heights
+- The result should look like a physical architectural scale model photographed from above at 45 degrees
+Return ONLY the image.`;
 
     const imagePart = {
       inlineData: {
@@ -37,41 +46,31 @@ export const POST: APIRoute = async ({ request }) => {
     const result = await model.generateContent([prompt, imagePart]);
     const response = await result.response;
 
-    let text = "";
-    try {
-      text = response.text();
-      console.log("Gemini Render Response Text:", text);
-    } catch (e) {
-      console.log("No text returned (expected for pure video/image response).");
-    }
-
     const parts = response.candidates?.[0]?.content?.parts;
-    const returnedImagePart = parts?.find(p => p.inlineData);
+    const returnedImagePart = parts?.find((p: any) => p.inlineData);
 
     if (returnedImagePart && returnedImagePart.inlineData) {
       const mimeType = returnedImagePart.inlineData.mimeType;
       const data = returnedImagePart.inlineData.data;
-      const base64Image = `data:${mimeType};base64,${data}`;
-
       return new Response(JSON.stringify({
-        rendered_image: base64Image,
-        message: "Photorealistic render generated"
+        isometric_image: `data:${mimeType};base64,${data}`
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       });
     }
 
+    // Fallback: return original if no image generated
     return new Response(JSON.stringify({
-      rendered_image: image, // Return original if generation failed
-      message: `AI Output (No image returned): ${text}`
+      isometric_image: image,
+      note: "Isometric conversion returned no image — using input as fallback."
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
 
   } catch (error: any) {
-    console.error("Render API Error:", error);
+    console.error("Isometric View API Error:", error);
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 };
