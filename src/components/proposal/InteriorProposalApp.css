@@ -24,7 +24,7 @@ button { cursor: pointer; }
   background: var(--white);
 }
 .studio-brand { display: flex; align-items: baseline; gap: 12px; color: var(--ink); text-decoration: none; }
-.studio-brand strong { font-size: 18px; font-weight: 800; letter-spacing: var(--track-display); }
+.studio-brand strong { font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: var(--track-display); }
 .studio-brand strong span { color: var(--archix-blue); }
 .studio-brand small { color: var(--fg3); font-size: var(--fs-micro); font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
 
