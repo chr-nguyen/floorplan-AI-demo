@@ -160,6 +160,12 @@ The available exports are:
 
 Exports follow the currently selected Japanese or English interface language.
 
+## Visual design
+
+The interface follows the ArchiX design system: white and ink surfaces on a `#F7F8FA` field, `#1F4CDA` as the single accent, hairline `#E5E7EB` rules instead of shadows, square corners (8px only on panels, 4px on inputs), uppercase 10px micro-labels with a 48×2px blue rule under section eyebrows, framed square checkmarks as the list marker, Inter / Noto Sans JP for text, and Chivo Mono for quantities, prices, and totals. Hover states swap background or border colour only — no transforms, lifts, or glows.
+
+Tokens live in `src/styles/archix.css`; `src/components/proposal/InteriorProposalApp.css` references them and hard-codes no colours. The exported and printed proposal document carries the same palette inline so the handoff artifact matches the screen.
+
 ## Application data flow
 
 ```text
@@ -227,7 +233,8 @@ Use a clear source photograph and state exactly what must remain in the customer
 
 - `src/components/proposal/InteriorProposalApp.tsx` — complete bilingual workflow, state, schedule, and exports.
 - `src/components/proposal/catalog.ts` — material, fixture, furniture, pricing, and translation data.
-- `src/components/proposal/InteriorProposalApp.css` — responsive application styling.
+- `src/components/proposal/InteriorProposalApp.css` — responsive application styling, built on the ArchiX tokens.
+- `src/styles/archix.css` — ArchiX design-system tokens and shared button utilities.
 - `src/pages/api/generate-interior-preview.ts` — server-side Gemini request, prompt, validation, and error handling.
 - `src/pages/api/estimate-room-surfaces.ts` — server-side Gemini vision request and structured surface-area validation.
 - `src/pages/index.astro` — application entry point.
