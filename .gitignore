@@ -1,4 +1,7 @@
 node_modules
-node_modules
 .vercel
 .env
+dist
+.astro
+.DS_Store
+yarn.lock
