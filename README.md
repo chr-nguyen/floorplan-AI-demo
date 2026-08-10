@@ -86,7 +86,9 @@ The panel on the right is an explicit checklist. Floor, walls, and ceiling are c
 - Use the dropdown under a checked finish to choose its material or product variant.
 - The selected-item count and total update immediately.
 
-The checklist is backed by the bilingual catalog in `src/components/proposal/catalog.ts`. Each catalog record contains:
+The checklist scrolls inside its own panel rather than lengthening the page, so the room photo and the render button stay in view while working down the list. The finish schedule below scrolls the same way once the selection outgrows it.
+
+The checklist is backed by the bilingual catalog in `src/components/proposal/catalog.ts`, which holds 45 finish, fixture, and colour variants across the ten selection slots plus 14 reference furniture and accessory records. Each catalog record contains:
 
 - Japanese and English names.
 - Specification and color.
