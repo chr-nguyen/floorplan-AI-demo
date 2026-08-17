@@ -132,8 +132,7 @@ button { cursor: pointer; }
 .estimate-result p small { grid-column: 1 / -1; overflow: hidden; color: var(--fg3); white-space: nowrap; text-overflow: ellipsis; }
 .estimate-error { grid-column: 1 / -1; padding: 10px 12px; border-left: 2px solid var(--destructive); color: var(--destructive-fg); background: var(--destructive-wash); font-size: var(--fs-sm); }
 
-.render-bar { min-height: 72px; padding: 16px; display: flex; align-items: center; gap: 24px; border-top: 1px solid var(--border); background: var(--bg-soft); }
-.gemini-notice { min-width: 0; flex: 1; margin: 0; color: var(--fg2); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.render-bar { min-height: 72px; padding: 16px; display: flex; align-items: center; justify-content: flex-end; gap: 24px; border-top: 1px solid var(--border); background: var(--bg-soft); }
 .render-button { flex-shrink: 0; min-width: 240px; padding: 13px 18px; display: flex; justify-content: space-between; gap: 24px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-body); font-weight: var(--w-semibold); transition: background var(--transition); }
 .render-button:hover:not(:disabled) { background: var(--archix-blue-600); }
 .render-button:disabled { cursor: not-allowed; opacity: .4; }
