@@ -7,6 +7,8 @@ export interface LocalizedScheduleText {
   en: string;
 }
 
+export type DerivedFinishScheduleField = Exclude<FinishScheduleField, 'room'>;
+
 export interface FinishScheduleRow {
   id: string;
   room: LocalizedScheduleText;
@@ -16,7 +18,10 @@ export interface FinishScheduleRow {
   wall: LocalizedScheduleText;
   ceiling: LocalizedScheduleText;
   remarks: LocalizedScheduleText;
+  edited?: DerivedFinishScheduleField[];
 }
+
+export const DERIVED_SCHEDULE_FIELDS: DerivedFinishScheduleField[] = ['floor', 'baseboard', 'dado', 'wall', 'ceiling', 'remarks'];
 
 const text = (ja: string, en: string): LocalizedScheduleText => ({ ja, en });
 
