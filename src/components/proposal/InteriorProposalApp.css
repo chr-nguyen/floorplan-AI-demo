@@ -89,6 +89,7 @@ button { cursor: pointer; }
 .quick-fields label > span { display: block; margin-bottom: 6px; color: var(--fg3); font-size: var(--fs-micro); font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
 .quick-fields input, .quick-fields select { width: 100%; padding: 0; border: 0; outline: 0; color: var(--fg1); background: transparent; font-size: var(--fs-sm); font-weight: var(--w-medium); text-overflow: ellipsis; }
 
+.workspace-pane.is-inactive { display: none; }
 .floorplan-workspace { --pane-height: clamp(600px, calc(100vh - 230px), 820px); display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: stretch; }
 .floorplan-main-panel, .floorplan-room-panel { min-width: 0; height: var(--pane-height); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--white); overflow: hidden; }
 .floorplan-header { min-height: 100px; padding: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--border); }
@@ -133,6 +134,7 @@ button { cursor: pointer; }
 .floorplan-edit-controls button.preview-active { color: var(--white); border-color: var(--archix-blue); background: var(--archix-blue); }
 .floorplan-edit-controls button:disabled { cursor: not-allowed; opacity: .45; }
 .floorplan-edit-controls span { padding: 5px 8px; color: var(--archix-blue); background: rgba(255,255,255,.92); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
+.floorplan-edit-controls span.floor-preview-hint { max-width: 260px; color: var(--fg2); font-weight: var(--w-medium); text-transform: none; letter-spacing: 0; }
 .floorplan-finish-legend { position: absolute; z-index: 4; right: 12px; bottom: 44px; width: min(250px, calc(100% - 24px)); max-height: 170px; padding: 8px; overflow-y: auto; border: 1px solid var(--border); background: rgba(255,255,255,.95); box-shadow: 0 5px 18px rgba(28,30,33,.12); backdrop-filter: blur(6px); }
 .floorplan-finish-legend > div { min-width: 0; padding: 5px; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 8px; }
 .floorplan-finish-legend i { width: 18px; height: 18px; border: 1px solid rgba(28,30,33,.18); }
