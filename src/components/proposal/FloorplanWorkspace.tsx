@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { pick, type Language } from '../i18n';
 import { prepareImage, readJsonResponse, MAX_SINGLE_IMAGE_LENGTH } from './downscaleImage';
+import { clearStoredFloorplan, readStoredFloorplan, writeStoredFloorplan } from './floorplanImageStore';
 
 export type FloorplanSurface = 'floor' | 'walls' | 'ceiling';
 
@@ -67,8 +68,7 @@ const ROOM_COLORS = ['#1f4cda', '#0f766e', '#b45309', '#7c3aed', '#be123c', '#03
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const FLOORPLAN_STORAGE_KEY = 'archix-floorplan-workspace-v1';
-const FLOORPLAN_IMAGE_KEY = 'archix-floorplan-image-v1';
-const MAX_PERSISTED_IMAGE_LENGTH = 1_500_000;
+const LEGACY_FLOORPLAN_IMAGE_KEY = 'archix-floorplan-image-v1';
 
 interface Point { x: number; y: number }
 
@@ -123,8 +123,8 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
   const zoomFrameRef = useRef<number>();
   const pointFrameRef = useRef<number>();
   const pendingPointRef = useRef<{ roomId: string; pointIndex: number; point: Point }>();
-  const imagePersistBlockedRef = useRef(false);
   const imageEffectReadyRef = useRef(false);
+  const uploadStartedRef = useRef(false);
   const persistedImageRef = useRef<string>();
   const objectUrlRef = useRef<string>();
   const pointersRef = useRef(new Map<number, Point>());
@@ -143,13 +143,15 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
   };
 
   useEffect(() => {
+    let cancelled = false;
+    void readStoredFloorplan().then((stored) => {
+      if (cancelled || !stored || uploadStartedRef.current) return;
+      persistedImageRef.current = stored;
+      setImageData(stored);
+      setImageUrl(stored);
+    });
     try {
-      const savedImage = localStorage.getItem(FLOORPLAN_IMAGE_KEY);
-      if (savedImage && savedImage.startsWith('data:image/')) {
-        persistedImageRef.current = savedImage;
-        setImageData(savedImage);
-        setImageUrl(savedImage);
-      }
+      localStorage.removeItem(LEGACY_FLOORPLAN_IMAGE_KEY);
       const saved = localStorage.getItem(FLOORPLAN_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -175,6 +177,7 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
     } finally {
       floorplanHydratedRef.current = true;
     }
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -196,21 +199,11 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
     }
     if (persistedImageRef.current === imageData) return;
     persistedImageRef.current = imageData;
-    try {
-      if (!imageData) {
-        localStorage.removeItem(FLOORPLAN_IMAGE_KEY);
-        imagePersistBlockedRef.current = false;
-        return;
-      }
-      if (imageData.length > MAX_PERSISTED_IMAGE_LENGTH || imagePersistBlockedRef.current) {
-        localStorage.removeItem(FLOORPLAN_IMAGE_KEY);
-        return;
-      }
-      localStorage.setItem(FLOORPLAN_IMAGE_KEY, imageData);
-    } catch {
-      imagePersistBlockedRef.current = true;
-      try { localStorage.removeItem(FLOORPLAN_IMAGE_KEY); } catch { /* nothing else to release */ }
+    if (!imageData) {
+      void clearStoredFloorplan();
+      return;
     }
+    void writeStoredFloorplan(imageData);
   }, [imageData]);
 
   useEffect(() => () => {
@@ -224,7 +217,8 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
     if (!viewport) return;
     const updateSize = () => {
       const rect = viewport.getBoundingClientRect();
-      setViewportSize({ width: Math.max(1, rect.width), height: Math.max(1, rect.height) });
+      if (rect.width < 2 || rect.height < 2) return;
+      setViewportSize({ width: rect.width, height: rect.height });
     };
     updateSize();
     const observer = new ResizeObserver(updateSize);
@@ -304,6 +298,7 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
       setError(t('画像は12MB以下にしてください。', 'The image must be 12 MB or smaller.'));
       return;
     }
+    uploadStartedRef.current = true;
     void prepareImage(file, { maxEdge: 3000, jpegQuality: 0.95, preservePng: true, maxLength: MAX_SINGLE_IMAGE_LENGTH }).then((data) => {
       const nextUrl = URL.createObjectURL(file);
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);

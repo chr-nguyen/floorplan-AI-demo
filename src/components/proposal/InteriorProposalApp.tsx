@@ -1017,13 +1017,16 @@ export default function InteriorProposalApp() {
           {workspaceView === 'room' && <label className="brief-field"><span>{t('要望', 'Brief')}</span><input value={requestNote} onChange={(event) => updateActiveDraft({ requestNote: event.target.value, previewStale: Boolean(previewUrl), previewVerification: undefined, previewApprovedAt: undefined })} /></label>}
         </section>
 
-        {workspaceView === 'floorplan' ? <FloorplanWorkspace
-          language={language}
-          onApplyRooms={applyFloorplanRooms}
-          floorFinishes={floorFinishPreviews}
-          linkedRoomIds={linkedFloorplanRoomIds}
-          onOpenRoom={switchRoom}
-        /> : <>
+        <div className={`workspace-pane ${workspaceView === 'floorplan' ? '' : 'is-inactive'}`} aria-hidden={workspaceView !== 'floorplan'}>
+          <FloorplanWorkspace
+            language={language}
+            onApplyRooms={applyFloorplanRooms}
+            floorFinishes={floorFinishPreviews}
+            linkedRoomIds={linkedFloorplanRoomIds}
+            onOpenRoom={switchRoom}
+          />
+        </div>
+        {workspaceView === 'room' && <>
         <section className="studio-workspace">
           <div className="visual-panel">
             <div className="visual-toolbar">

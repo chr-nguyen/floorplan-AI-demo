@@ -89,6 +89,7 @@ button { cursor: pointer; }
 .quick-fields label > span { display: block; margin-bottom: 6px; color: var(--fg3); font-size: var(--fs-micro); font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
 .quick-fields input, .quick-fields select { width: 100%; padding: 0; border: 0; outline: 0; color: var(--fg1); background: transparent; font-size: var(--fs-sm); font-weight: var(--w-medium); text-overflow: ellipsis; }
 
+.workspace-pane.is-inactive { display: none; }
 .floorplan-workspace { --pane-height: clamp(600px, calc(100vh - 230px), 820px); display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: stretch; }
 .floorplan-main-panel, .floorplan-room-panel { min-width: 0; height: var(--pane-height); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--white); overflow: hidden; }
 .floorplan-header { min-height: 100px; padding: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--border); }
