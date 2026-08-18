@@ -562,6 +562,9 @@ export default function FloorplanWorkspace({ language, onApplyRooms, floorFinish
           </div><div className="floorplan-edit-controls" onPointerDown={(event) => event.stopPropagation()}>
             <button className={calibrationMode ? 'active' : ''} disabled={!analysis} onClick={() => { setCalibrationMode((current) => !current); setCalibrationPoints([]); setEditingRoomId(undefined); }}>{t('縮尺を補正', 'Calibrate scale')}</button>
             <button className={showFloorFinishPreview ? 'active preview-active' : ''} disabled={!analysis || !hasFloorFinishes} onClick={() => setShowFloorFinishPreview((current) => !current)}>{showFloorFinishPreview ? t('床プレビュー ON', 'Floor preview ON') : t('床色をプレビュー', 'Preview floor colors')}</button>
+            {analysis && !hasFloorFinishes && <span className="floor-preview-hint">{isWorkflowBasis
+              ? t('部屋タブで床仕上げを有効にすると色をプレビューできます', 'Enable a floor finish in a room to preview its colour here')
+              : t('この平面図を適用すると床色をプレビューできます', 'Apply this takeoff to preview floor colours here')}</span>}
             {manualPixelsPerMeter && <span>✓ {t('手動補正済み', 'Manually calibrated')}</span>}
           </div>
           {calibrationMode && <div className="floorplan-calibration-editor" onPointerDown={(event) => event.stopPropagation()}>
