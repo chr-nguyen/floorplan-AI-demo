@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 
 const GOOGLE_API_KEY = import.meta.env.GOOGLE_API_KEY;
 const MODEL = import.meta.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image';
-const MAX_IMAGE_LENGTH = 18_000_000;
+const MAX_IMAGE_LENGTH = 3_400_000;
 
 interface PreviewItem {
   section?: string;
@@ -11,7 +11,10 @@ interface PreviewItem {
   color?: string;
   code?: string;
   status?: string;
+  exactProductConfirmed?: boolean;
 }
+
+const PROMPT_VERSION = 'interior-preview-accuracy-v2';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -29,13 +32,17 @@ export const POST: APIRoute = async ({ request }) => {
     const note = String(body.note || '').slice(0, 800);
     const items: PreviewItem[] = Array.isArray(body.items) ? body.items.slice(0, 30) : [];
 
-    if (!sourcePhoto || sourcePhoto.length > MAX_IMAGE_LENGTH) return json({ error: 'A valid room photo under 12 MB is required.' }, 400);
+    if (!sourcePhoto || sourcePhoto.length > MAX_IMAGE_LENGTH) return json({ error: 'The room photo is too large after downscaling. Try a smaller file.' }, 400);
     const match = sourcePhoto.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);
     if (!match) return json({ error: 'The room photo must be a PNG or JPEG data URL.' }, 400);
     if (!items.length) return json({ error: 'At least one selected material is required.' }, 400);
 
     const schedule = items.map((item, index) => {
-      const code = item.code ? `; approved product code: ${item.code}` : '; exact maker and product code are not yet confirmed';
+      const code = item.code && item.exactProductConfirmed
+        ? `; confirmed manufacturer product code: ${item.code}`
+        : item.code
+          ? `; internal POC reference only (not a manufacturer SKU): ${item.code}`
+          : '; exact maker and product code are not confirmed';
       return `${index + 1}. [${item.section || 'item'} / ${item.status || 'selection'}] ${item.name || 'Unnamed item'} — ${item.specification || ''}; color/design intent: ${item.color || ''}${code}`;
     }).join('\n');
 
@@ -103,6 +110,7 @@ Return exactly one photorealistic edited version of the INPUT IMAGE. Preserve th
       image: `data:${inlineData.mimeType || inlineData.mime_type || 'image/png'};base64,${inlineData.data}`,
       model: MODEL,
       conceptOnly: true,
+      promptVersion: PROMPT_VERSION,
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return json({ error: 'Image generation timed out after 120 seconds.' }, 504);

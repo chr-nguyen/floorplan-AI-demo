@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 
 const GOOGLE_API_KEY = import.meta.env.GOOGLE_API_KEY;
 const MODEL = import.meta.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash';
-const MAX_IMAGE_LENGTH = 18_000_000;
+const PROMPT_VERSION = 'photo-surface-suggestion-accuracy-v2';
+const MAX_IMAGE_LENGTH = 3_400_000;
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -23,7 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
     const room = String(body.room || 'residential room').slice(0, 120);
     const assumedCeilingHeight = finiteInRange(body.assumedCeilingHeight, 2, 5) || 2.4;
 
-    if (!sourcePhoto || sourcePhoto.length > MAX_IMAGE_LENGTH) return json({ error: 'A valid room photo under 12 MB is required.' }, 400);
+    if (!sourcePhoto || sourcePhoto.length > MAX_IMAGE_LENGTH) return json({ error: 'The room photo is too large after downscaling. Try a smaller file.' }, 400);
     const match = sourcePhoto.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);
     if (!match) return json({ error: 'The room photo must be a PNG or JPEG data URL.' }, 400);
 
@@ -101,13 +102,22 @@ Do not claim measurement accuracy. Prefer conservative, internally consistent va
       confidence: ['low', 'medium', 'high'].includes(parsed.confidence) ? parsed.confidence : 'low',
       assumptionJa: String(parsed.assumptionJa || '写真と想定天井高からの概算です。').slice(0, 300),
       assumptionEn: String(parsed.assumptionEn || 'Approximation based on the photo and assumed ceiling height.').slice(0, 300),
+      validationIssues: [] as string[],
+      measurementStatus: 'unverified-ai-suggestion',
     };
 
     if (!estimate.floorAreaM2 || !estimate.netWallAreaM2 || !estimate.ceilingAreaM2 || !estimate.roomWidthM || !estimate.roomDepthM || !estimate.ceilingHeightM) {
       return json({ error: 'Gemini returned an incomplete or implausible surface estimate.' }, 502);
     }
 
-    return json({ estimate, model: MODEL, measurementType: 'ai-photo-estimate' });
+    if (Math.abs(estimate.floorAreaM2 - estimate.ceilingAreaM2) / estimate.floorAreaM2 > 0.12) estimate.validationIssues.push('Floor and ceiling areas are inconsistent.');
+    const rectangularArea = estimate.roomWidthM * estimate.roomDepthM;
+    if (estimate.floorAreaM2 > rectangularArea * 1.15 || estimate.floorAreaM2 < rectangularArea * 0.55) estimate.validationIssues.push('Floor area is inconsistent with the reported room dimensions.');
+    const grossWallArea = 2 * (estimate.roomWidthM + estimate.roomDepthM) * estimate.ceilingHeightM;
+    if (estimate.netWallAreaM2 > grossWallArea) estimate.validationIssues.push('Net wall area exceeds the calculated gross wall area.');
+    estimate.confidence = estimate.validationIssues.length ? 'low' : estimate.confidence === 'low' ? 'low' : 'medium';
+
+    return json({ estimate, model: MODEL, promptVersion: PROMPT_VERSION, measurementType: 'ai-photo-estimate' });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return json({ error: 'Surface estimation timed out after 60 seconds.' }, 504);
     return json({ error: error instanceof Error ? error.message : 'Unexpected surface-estimation error.' }, 500);
