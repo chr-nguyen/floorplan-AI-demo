@@ -122,13 +122,19 @@ button { cursor: pointer; }
 .floorplan-canvas .calibration-layer line { vector-effect: non-scaling-stroke; stroke: var(--destructive); stroke-width: 2px; stroke-dasharray: 5 3; pointer-events: none; }
 .floorplan-canvas .calibration-layer circle { vector-effect: non-scaling-stroke; fill: var(--white); stroke: var(--destructive); stroke-width: 2px; pointer-events: none; }
 .floorplan-canvas .calibration-layer text { fill: var(--destructive); stroke: var(--white); stroke-width: .7px; font-size: 3px; pointer-events: none; }
+.floorplan-canvas .geometry-tool-layer rect { fill: transparent; cursor: crosshair; }
+.floorplan-canvas .geometry-tool-layer .split-room-target { fill: rgba(31,76,218,.18); stroke: var(--archix-blue); stroke-width: 2.5px; stroke-dasharray: 5 3; pointer-events: none; }
+.floorplan-canvas .geometry-tool-layer .draft-room-polygon { fill: rgba(31,76,218,.24); stroke: var(--archix-blue); stroke-width: 2px; stroke-dasharray: 4 2; pointer-events: none; }
+.floorplan-canvas .geometry-tool-layer .draft-split-line { vector-effect: non-scaling-stroke; stroke: var(--destructive); stroke-width: 2.5px; stroke-dasharray: 5 3; pointer-events: none; }
+.floorplan-canvas .geometry-tool-layer .geometry-point circle { vector-effect: non-scaling-stroke; fill: var(--white); stroke: var(--archix-blue); stroke-width: 2px; pointer-events: none; }
+.floorplan-canvas .geometry-tool-layer .geometry-point text { fill: var(--archix-blue); stroke: var(--white); stroke-width: .7px; font-size: 3px; pointer-events: none; }
 .floorplan-zoom-controls { position: absolute; z-index: 4; top: 12px; right: 12px; display: flex; align-items: stretch; border: 1px solid var(--border); background: var(--white); box-shadow: 0 4px 16px rgba(28,30,33,.12); }
 .floorplan-zoom-controls button, .floorplan-zoom-controls output { min-width: 36px; height: 34px; padding: 0 9px; display: grid; place-items: center; border: 0; border-right: 1px solid var(--border); color: var(--fg1); background: var(--white); font-family: var(--font-mono); font-size: var(--fs-sm); }
 .floorplan-zoom-controls button:hover:not(:disabled) { color: var(--archix-blue); background: var(--accent-wash); }
 .floorplan-zoom-controls button:disabled { cursor: not-allowed; color: var(--gray-300); }
 .floorplan-zoom-controls output { min-width: 56px; color: var(--fg2); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
 .floorplan-zoom-controls .fit-button { min-width: 56px; border-right: 0; color: var(--archix-blue); font-family: var(--font-sans); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
-.floorplan-edit-controls { position: absolute; z-index: 4; top: 12px; left: 12px; display: flex; align-items: center; gap: 8px; }
+.floorplan-edit-controls { position: absolute; z-index: 4; top: 12px; right: 226px; left: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .floorplan-edit-controls button { height: 36px; padding: 0 12px; border: 1px solid var(--border); color: var(--ink); background: var(--white); box-shadow: 0 4px 16px rgba(28,30,33,.1); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
 .floorplan-edit-controls button:hover:not(:disabled), .floorplan-edit-controls button.active { border-color: var(--archix-blue); color: var(--archix-blue); background: var(--accent-wash); }
 .floorplan-edit-controls button.preview-active { color: var(--white); border-color: var(--archix-blue); background: var(--archix-blue); }
@@ -151,6 +157,14 @@ button { cursor: pointer; }
 .floorplan-calibration-editor label em { margin-left: 5px; color: var(--fg2); font-size: var(--fs-sm); font-style: normal; }
 .floorplan-calibration-editor > button { height: 34px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
 .floorplan-calibration-editor > button:disabled { cursor: not-allowed; opacity: .4; }
+.floorplan-geometry-editor { position: absolute; z-index: 5; right: 12px; bottom: 12px; left: 12px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto 140px; align-items: center; gap: 10px; border: 1px solid var(--archix-blue); background: rgba(255,255,255,.97); box-shadow: 0 6px 20px rgba(28,30,33,.14); }
+.floorplan-geometry-editor strong, .floorplan-geometry-editor small, .floorplan-geometry-editor em { display: block; }
+.floorplan-geometry-editor strong { font-size: var(--fs-sm); }
+.floorplan-geometry-editor small { margin-top: 3px; color: var(--fg2); font-size: var(--fs-micro); }
+.floorplan-geometry-editor em { margin-top: 4px; color: var(--destructive); font-size: var(--fs-micro); font-style: normal; font-weight: var(--w-semibold); }
+.floorplan-geometry-editor button { height: 34px; padding: 0 14px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
+.floorplan-geometry-editor button.secondary { color: var(--fg1); border: 1px solid var(--border); background: var(--white); }
+.floorplan-geometry-editor button:disabled { cursor: not-allowed; opacity: .4; }
 .floorplan-gesture-hint { position: absolute; z-index: 3; left: 12px; bottom: 10px; padding: 5px 8px; color: var(--fg2); background: rgba(255,255,255,.9); box-shadow: 0 1px 5px rgba(28,30,33,.08); font-size: var(--fs-micro); pointer-events: none; }
 .floorplan-controls { min-height: 88px; padding: 14px 16px; display: grid; grid-template-columns: 130px minmax(0, 1fr) 190px; align-items: center; gap: 18px; border-top: 1px solid var(--border); background: var(--white); }
 .floorplan-controls > label > span { display: block; margin-bottom: 5px; color: var(--fg3); font-size: var(--fs-micro); font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
@@ -172,6 +186,7 @@ button { cursor: pointer; }
 .detected-room-card { margin-bottom: 10px; border: 1px solid var(--border); background: var(--white); opacity: .58; transition: opacity var(--transition), border-color var(--transition); }
 .detected-room-card.selected { border-color: var(--archix-blue); opacity: 1; }
 .detected-room-card.editing { box-shadow: inset 3px 0 0 var(--archix-blue); }
+.detected-room-card.renaming { box-shadow: inset 3px 0 0 var(--archix-blue); }
 .detected-room-title { position: relative; padding: 11px; display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 10px; cursor: pointer; }
 .detected-room-title input { position: absolute; opacity: 0; pointer-events: none; }
 .room-index { width: 26px; height: 26px; display: grid; place-items: center; color: var(--white); font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
@@ -180,8 +195,18 @@ button { cursor: pointer; }
 .detected-room-title strong { font-size: var(--fs-sm); font-weight: var(--w-semibold); }
 .detected-room-title small { margin-top: 3px; color: var(--fg2); font-family: var(--font-mono); font-size: var(--fs-micro); }
 .detected-room-title .room-validation-warning { display: block; margin-top: 5px; color: var(--destructive); font-family: var(--font-sans); font-size: 10px; font-style: normal; font-weight: var(--w-semibold); }
-.edit-outline-button { width: calc(100% - 22px); margin: -2px 11px 10px; padding: 6px 8px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
-.edit-outline-button:hover { border-color: var(--archix-blue); background: var(--accent-wash); }
+.room-rename-editor { margin: -2px 11px 10px; padding: 9px; display: grid; grid-template-columns: 1fr; gap: 8px; border: 1px solid var(--archix-blue); background: var(--accent-wash); }
+.room-rename-editor label span { display: block; margin-bottom: 4px; color: var(--fg3); font-size: 10px; font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
+.room-rename-editor input { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--border); color: var(--fg1); background: var(--white); font-size: var(--fs-sm); }
+.room-rename-editor > em, .room-rename-editor > small, .room-rename-editor > div { grid-column: 1 / -1; }
+.room-rename-editor > em { color: var(--destructive); font-size: var(--fs-micro); font-style: normal; font-weight: var(--w-semibold); }
+.room-rename-editor > small { color: var(--fg2); font-size: 10px; line-height: 1.4; }
+.room-rename-editor > div { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.room-rename-editor button { padding: 7px 8px; border: 1px solid var(--border); color: var(--fg1); background: var(--white); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
+.room-rename-editor button[type="submit"] { color: var(--white); border-color: var(--archix-blue); background: var(--archix-blue); }
+.room-geometry-actions { margin: -2px 11px 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.room-geometry-actions button { min-width: 0; padding: 6px 7px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
+.room-geometry-actions button:hover, .room-geometry-actions button.active { border-color: var(--archix-blue); background: var(--accent-wash); }
 .open-linked-room-button { width: calc(100% - 22px); margin: -2px 11px 8px; padding: 7px 8px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
 .open-linked-room-button:hover { background: var(--archix-blue-600); }
 .surface-scope { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border); }
@@ -195,6 +220,7 @@ button { cursor: pointer; }
 .floorplan-apply { padding: 14px; border-top: 1px solid var(--border); background: var(--white); }
 .floorplan-apply p { margin: 0 0 10px; color: var(--fg2); font-size: var(--fs-micro); line-height: 1.45; }
 .takeoff-validation-summary { margin-bottom: 9px; padding: 7px 8px; color: var(--destructive-fg); border-left: 2px solid var(--destructive); background: var(--destructive-wash); font-size: var(--fs-micro); line-height: 1.4; }
+.takeoff-validation-summary.advisory { color: var(--fg2); border-left-color: var(--gray-400); background: var(--gray-100); }
 .takeoff-review-check { margin-bottom: 10px; padding: 8px; display: flex; align-items: flex-start; gap: 8px; border: 1px solid var(--border); color: var(--fg2); background: var(--bg-soft); cursor: pointer; font-size: var(--fs-micro); font-weight: var(--w-semibold); line-height: 1.4; }
 .takeoff-review-check input { margin-top: 1px; accent-color: var(--archix-blue); }
 .floorplan-apply button { width: 100%; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
@@ -239,6 +265,8 @@ button { cursor: pointer; }
 .verification-chip.fail { color: var(--destructive-fg); border-color: #fca5a5; background: var(--destructive-wash); }
 .render-error { margin: 12px 16px 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; border-left: 2px solid var(--destructive); color: var(--destructive-fg); background: var(--destructive-wash); font-size: var(--fs-sm); }
 .render-error strong { font-weight: var(--w-semibold); }
+.render-error.demo-notice { color: var(--fg2); border-color: var(--archix-blue); background: var(--accent-wash); }
+.floorplan-main-panel > .render-error.demo-notice { border-top-color: var(--border); }
 
 .surface-estimator { padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 120px 160px; align-items: end; gap: 16px; border-top: 1px solid var(--border); background: var(--white); }
 .estimate-intro { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -265,6 +293,7 @@ button { cursor: pointer; }
 .estimate-review-actions button { padding: 8px 12px; border: 1px solid var(--border); color: var(--ink); background: var(--white); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
 .estimate-review-actions button.approve { color: var(--white); border-color: var(--archix-blue); background: var(--archix-blue); }
 .estimate-error { grid-column: 1 / -1; padding: 10px 12px; border-left: 2px solid var(--destructive); color: var(--destructive-fg); background: var(--destructive-wash); font-size: var(--fs-sm); }
+.estimate-error.demo-notice { color: var(--fg2); border-color: var(--archix-blue); background: var(--accent-wash); }
 .surface-estimator.takeoff-basis { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .estimate-basis-link { padding: 10px 14px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-size: var(--fs-sm); font-weight: var(--w-semibold); white-space: nowrap; transition: background var(--transition), border-color var(--transition); }
 .estimate-basis-link:hover { border-color: var(--archix-blue); background: var(--bg-soft); }
@@ -281,6 +310,7 @@ button { cursor: pointer; }
 .preview-verification-panel button { flex-shrink: 0; padding: 8px 11px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
 
 .render-bar { min-height: 72px; padding: 16px; display: flex; align-items: center; justify-content: flex-end; gap: 24px; border-top: 1px solid var(--border); background: var(--bg-soft); }
+.render-credit-note { margin-right: auto; color: var(--fg3); font-size: var(--fs-micro); }
 .render-button { flex-shrink: 0; min-width: 240px; padding: 13px 18px; display: flex; justify-content: space-between; gap: 24px; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-body); font-weight: var(--w-semibold); transition: background var(--transition); }
 .render-button:hover:not(:disabled) { background: var(--archix-blue-600); }
 .render-button:disabled { cursor: not-allowed; opacity: .4; }
@@ -489,11 +519,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .floorplan-tab-shell { min-width: 176px; flex-basis: 176px; }
   .floorplan-viewport { inset: 14px; }
   .floorplan-zoom-controls { top: 8px; right: 8px; }
-  .floorplan-edit-controls { top: 48px; left: 8px; }
+  .floorplan-edit-controls { top: 48px; right: 8px; left: 8px; }
   .floorplan-edit-controls button { max-width: 150px; padding: 0 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .floorplan-finish-legend { right: 8px; bottom: 42px; width: min(220px, calc(100% - 16px)); max-height: 122px; }
   .floorplan-calibration-editor { right: 8px; bottom: 8px; left: 8px; grid-template-columns: 1fr 105px; }
   .floorplan-calibration-editor > button { grid-column: 1 / -1; }
+  .floorplan-geometry-editor { right: 8px; bottom: 8px; left: 8px; grid-template-columns: 1fr 1fr; }
+  .floorplan-geometry-editor > div { grid-column: 1 / -1; }
   .floorplan-zoom-controls button, .floorplan-zoom-controls output { min-width: 34px; height: 32px; padding: 0 7px; }
   .floorplan-zoom-controls .fit-button { min-width: 48px; }
   .floorplan-gesture-hint { right: 8px; bottom: 7px; left: auto; max-width: calc(100% - 16px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
