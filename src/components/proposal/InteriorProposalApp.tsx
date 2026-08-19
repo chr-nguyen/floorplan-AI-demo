@@ -16,8 +16,9 @@ import {
   type SelectionSlot,
 } from './catalog';
 import { blankFinishScheduleRow, cloneFinishSchedule, scheduleText, DERIVED_SCHEDULE_FIELDS, type DerivedFinishScheduleField, type FinishScheduleField, type FinishScheduleRow } from './finishSchedule';
-import { prepareImage, readJsonResponse, MAX_PAIRED_IMAGE_LENGTH, MAX_SINGLE_IMAGE_LENGTH } from './downscaleImage';
+import { prepareImage, readJsonResponse, MAX_SINGLE_IMAGE_LENGTH } from './downscaleImage';
 import FloorplanWorkspace, { type AppliedFloorplanRoom, type FloorFinishPreview, type FloorplanSurface } from './FloorplanWorkspace';
+import { demoAiErrorMessage } from './demoAiErrors';
 import '../../styles/archix.css';
 import './InteriorProposalApp.css';
 
@@ -94,19 +95,6 @@ interface SurfaceEstimate {
   promptVersion?: string;
 }
 
-interface PreviewVerification {
-  status: 'pass' | 'review' | 'fail';
-  structureScore: number;
-  scheduleScore: number;
-  structurePreserved: boolean;
-  selectedItemsPresent: boolean;
-  issues: string[];
-  missingItems: string[];
-  unexpectedChanges: string[];
-  model?: string;
-  verifierType?: string;
-}
-
 interface RoomDraft {
   style: string;
   requestNote: string;
@@ -119,7 +107,6 @@ interface RoomDraft {
   quantities: Record<string, number>;
   previewUrl?: string;
   previewStale: boolean;
-  previewVerification?: PreviewVerification;
   previewApprovedAt?: string;
   renderMetadata?: { model?: string; promptVersion?: string; generatedAt: string };
   assumedCeilingHeight: number;
@@ -276,9 +263,27 @@ const isPristineDraft = (draft: RoomDraft) => {
 
 const isBlankScheduleRow = (row: FinishScheduleRow) => DERIVED_SCHEDULE_FIELDS.every((field) => !row[field].ja && !row[field].en);
 
-const currency = (value: number, language: Language) => new Intl.NumberFormat(language === 'ja' ? 'ja-JP' : 'en-US', {
-  style: 'currency', currency: 'JPY', maximumFractionDigits: 0,
-}).format(value);
+const localeOf = (language: Language) => (language === 'ja' ? 'ja-JP' : 'en-US');
+
+const cached = <T,>(build: (locale: string) => T) => {
+  const store = new Map<string, T>();
+  return (language: Language) => {
+    const locale = localeOf(language);
+    let value = store.get(locale);
+    if (!value) {
+      value = build(locale);
+      store.set(locale, value);
+    }
+    return value;
+  };
+};
+
+const currencyFormatter = cached((locale) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 }));
+const timeFormatter = cached((locale) => new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }));
+const longDateFormatter = cached((locale) => new Intl.DateTimeFormat(locale, { dateStyle: 'long' }));
+const nameCollator = cached((locale) => new Intl.Collator(locale));
+
+const currency = (value: number, language: Language) => currencyFormatter(language).format(value);
 
 interface ScheduleRowProps {
   row: FinishScheduleRow;
@@ -349,12 +354,15 @@ export default function InteriorProposalApp() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectHydratedRef = useRef(false);
   const roomDraftsRef = useRef<Record<string, RoomDraft>>({});
+  const roomTabsRef = useRef<RoomTab[]>(DEFAULT_ROOM_TABS);
+  const previewInFlightRef = useRef(false);
+  const estimateInFlightRef = useRef(false);
 
   const t = (ja: string, en: string) => pick(language, ja, en);
   const room = roomTabs.find((candidate) => candidate.id === activeRoomId) || roomTabs[0] || DEFAULT_ROOM_TABS[0];
   const roomType = room.type;
   const activeDraft = useMemo(() => roomDrafts[activeRoomId] || createRoomDraft(), [roomDrafts, activeRoomId]);
-  const { style, requestNote, sourcePhotoUrl, sourcePhotoData, sourcePhotoName, selections, enabledSlots, accessories, quantities, previewUrl, previewStale, previewVerification, previewApprovedAt, assumedCeilingHeight, surfaceEstimate, surfaceEstimateSuggestion } = activeDraft;
+  const { style, requestNote, sourcePhotoUrl, sourcePhotoData, sourcePhotoName, selections, enabledSlots, accessories, quantities, previewUrl, previewStale, previewApprovedAt, assumedCeilingHeight, surfaceEstimate, surfaceEstimateSuggestion } = activeDraft;
   const usesFloorplanTakeoff = Boolean(floorplanSourceIdFor(room));
   const displayedSurfaceEstimate = surfaceEstimateSuggestion || surfaceEstimate;
 
@@ -419,6 +427,8 @@ export default function InteriorProposalApp() {
 
   useEffect(() => { roomDraftsRef.current = roomDrafts; }, [roomDrafts]);
 
+  useEffect(() => { roomTabsRef.current = roomTabs; }, [roomTabs]);
+
   useEffect(() => () => {
     Object.values(roomDraftsRef.current).forEach((draft) => {
       if (draft.sourcePhotoUrl) URL.revokeObjectURL(draft.sourcePhotoUrl);
@@ -436,7 +446,7 @@ export default function InteriorProposalApp() {
       next[index] = patched;
       return next;
     });
-  }, [activeRoomId, roomType, activeDraft, selections, enabledSlots, accessories, surfaceEstimate, finishScheduleRows]);
+  }, [activeRoomId, roomType, activeDraft]);
 
   const updateActiveDraft = (update: Partial<RoomDraft> | ((current: RoomDraft) => Partial<RoomDraft>)) => {
     setRoomDrafts((current) => {
@@ -492,7 +502,8 @@ export default function InteriorProposalApp() {
         }
       });
     });
-    return [...aggregate.values()].sort((a, b) => a.item.section.localeCompare(b.item.section) || itemName(a.item, language).localeCompare(itemName(b.item, language)));
+    const collator = nameCollator(language);
+    return [...aggregate.values()].sort((a, b) => collator.compare(a.item.section, b.item.section) || collator.compare(itemName(a.item, language), itemName(b.item, language)));
   }, [roomTabs, roomDrafts, language]);
   const projectSubtotal = projectLines.reduce((sum, line) => sum + (priceOverrides[line.item.id] ?? line.item.unitPrice ?? 0) * line.quantity, 0);
   const projectTax = Math.round(projectSubtotal * 0.1);
@@ -519,6 +530,8 @@ export default function InteriorProposalApp() {
   const linkedFloorplanRoomCount = Object.keys(linkedFloorplanRoomIds).length;
 
   const estimateRoomSurfaces = async (imageData: string, targetRoomId: string, targetRoomName: string, ceilingHeight: number) => {
+    if (estimateInFlightRef.current) return;
+    estimateInFlightRef.current = true;
     setEstimateLoading(true);
     setEstimateError(undefined);
     try {
@@ -546,8 +559,9 @@ export default function InteriorProposalApp() {
         };
       });
     } catch (error) {
-      setEstimateError(error instanceof Error ? error.message : t('面積の推定に失敗しました。', 'Surface estimation failed.'));
+      setEstimateError(demoAiErrorMessage(error, language, 'estimate'));
     } finally {
+      estimateInFlightRef.current = false;
       setEstimateLoading(false);
     }
   };
@@ -563,8 +577,6 @@ export default function InteriorProposalApp() {
       return;
     }
     const targetRoomId = activeRoomId;
-    const targetRoomName = room.en;
-    const targetCeilingHeight = assumedCeilingHeight;
     const targetUsesFloorplanTakeoff = usesFloorplanTakeoff;
     void prepareImage(file, { maxEdge: 2560, jpegQuality: 0.92, maxLength: MAX_SINGLE_IMAGE_LENGTH }).then((imageData) => {
       const nextPhotoUrl = URL.createObjectURL(file);
@@ -578,7 +590,6 @@ export default function InteriorProposalApp() {
           sourcePhotoName: file.name,
           previewUrl: undefined,
           previewStale: false,
-          previewVerification: undefined,
           previewApprovedAt: undefined,
           renderMetadata: undefined,
           renderedAt: undefined,
@@ -595,7 +606,6 @@ export default function InteriorProposalApp() {
       setViewMode('source');
       setPreviewError(undefined);
       setEstimateError(undefined);
-      if (!targetUsesFloorplanTakeoff) void estimateRoomSurfaces(imageData, targetRoomId, targetRoomName, targetCeilingHeight);
     }).catch((error) => {
       setPreviewError(t('画像を読み込めませんでした。', error instanceof Error ? error.message : 'The image could not be loaded.'));
     });
@@ -606,7 +616,6 @@ export default function InteriorProposalApp() {
       selections: { ...current.selections, [slot]: itemId },
       quantities: { ...current.quantities, [itemId]: current.quantities[itemId] ?? surfaceQuantity(current.surfaceEstimate, slot) ?? DEFAULT_SLOT_QUANTITY[slot] },
       previewStale: Boolean(current.previewUrl),
-      previewVerification: undefined,
       previewApprovedAt: undefined,
     }));
   };
@@ -631,7 +640,6 @@ export default function InteriorProposalApp() {
     updateActiveDraft((current) => ({
       enabledSlots: current.enabledSlots.includes(slot) ? current.enabledSlots.filter((id) => id !== slot) : [...current.enabledSlots, slot],
       previewStale: Boolean(current.previewUrl),
-      previewVerification: undefined,
       previewApprovedAt: undefined,
     }));
   };
@@ -640,7 +648,6 @@ export default function InteriorProposalApp() {
     updateActiveDraft((current) => ({
       accessories: current.accessories.includes(itemId) ? current.accessories.filter((id) => id !== itemId) : [...current.accessories, itemId],
       previewStale: Boolean(current.previewUrl),
-      previewVerification: undefined,
       previewApprovedAt: undefined,
     }));
   };
@@ -666,9 +673,13 @@ export default function InteriorProposalApp() {
   }, [language]);
 
   const restoreDerivedScheduleCell = useCallback((rowId: string, field: DerivedFinishScheduleField) => {
-    setFinishScheduleRows((current) => current.map((row) => row.id === rowId
-      ? { ...row, edited: (row.edited || []).filter((candidate) => candidate !== field) }
-      : row));
+    setFinishScheduleRows((current) => current.map((row) => {
+      if (row.id !== rowId) return row;
+      const cleared = { ...row, edited: (row.edited || []).filter((candidate) => candidate !== field) };
+      const tab = roomTabsRef.current.find((candidate) => candidate.id === rowId);
+      const draft = roomDraftsRef.current[rowId];
+      return tab && draft ? withSchedulePatch(cleared, finishSchedulePatch(draft, tab.type)) : cleared;
+    }));
   }, []);
 
   const addRoom = () => {
@@ -815,6 +826,7 @@ export default function InteriorProposalApp() {
   };
 
   const generatePreview = async () => {
+    if (previewInFlightRef.current) return;
     if (!sourcePhotoData) {
       setPreviewError(t('先に既存の室内写真をアップロードしてください。', 'Upload a photo of the existing room first.'));
       return;
@@ -823,6 +835,7 @@ export default function InteriorProposalApp() {
       setPreviewError(t('反映する仕上げまたは家具を1つ以上選択してください。', 'Select at least one finish or furniture item to apply.'));
       return;
     }
+    previewInFlightRef.current = true;
     setPreviewLoading(true);
     setPreviewError(undefined);
     try {
@@ -850,49 +863,24 @@ export default function InteriorProposalApp() {
       const payload = await readJsonResponse(response);
       if (!response.ok || !payload.image) throw new Error(payload.error || 'Preview generation failed');
       const renderedAt = new Date().toISOString();
-      let verification: PreviewVerification;
-      try {
-        const [auditSource, auditRender] = await Promise.all([
-          prepareImage(sourcePhotoData, { maxEdge: 1280, jpegQuality: 0.85, maxLength: MAX_PAIRED_IMAGE_LENGTH }),
-          prepareImage(payload.image, { maxEdge: 1280, jpegQuality: 0.85, maxLength: MAX_PAIRED_IMAGE_LENGTH }),
-        ]);
-        const verificationResponse = await fetch('/api/verify-interior-preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourcePhoto: auditSource,
-            renderedImage: auditRender,
-            items: previewItems.map((item) => `${item.name} — ${item.color}; ${item.specification}`),
-          }),
-        });
-        const verificationPayload = await readJsonResponse(verificationResponse);
-        if (!verificationResponse.ok || !verificationPayload.verification) throw new Error(verificationPayload.error || 'Preview verification failed');
-        verification = verificationPayload.verification as PreviewVerification;
-      } catch (verificationError) {
-        verification = {
-          status: 'review', structureScore: 0, scheduleScore: 0, structurePreserved: false, selectedItemsPresent: false,
-          issues: [verificationError instanceof Error ? verificationError.message : 'Automatic verification was unavailable.'], missingItems: [], unexpectedChanges: [],
-          verifierType: 'verification-unavailable-requires-human-review',
-        };
-      }
       updateActiveDraft({
         previewUrl: payload.image,
         previewStale: false,
-        previewVerification: verification,
         previewApprovedAt: undefined,
         renderedAt,
         renderMetadata: { model: payload.model, promptVersion: payload.promptVersion, generatedAt: renderedAt },
       });
       setViewMode('preview');
     } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : t('AIプレビューの生成に失敗しました。', 'AI preview generation failed.'));
+      setPreviewError(demoAiErrorMessage(error, language, 'preview'));
     } finally {
+      previewInFlightRef.current = false;
       setPreviewLoading(false);
     }
   };
 
   const approvePreview = () => {
-    if (!previewVerification || previewVerification.status === 'fail') return;
+    if (!previewUrl || previewStale) return;
     updateActiveDraft({ previewApprovedAt: new Date().toISOString() });
   };
 
@@ -908,7 +896,7 @@ export default function InteriorProposalApp() {
         : escapeHtml(itemSource(item, language));
       return `<tr><td><span class="swatch" style="background:${item.swatch}"></span></td><td>${escapeHtml(SECTION_LABELS[item.section][language])}<small class="status">${escapeHtml(statusLabel(item.status, language))}</small></td><td><strong>${escapeHtml(itemName(item, language))}</strong><small>${escapeHtml(itemSpecification(item, language))}</small></td><td>${escapeHtml(item.size)}</td><td>${escapeHtml(itemColor(item, language))}<small>${escapeHtml(code)}</small></td><td>${escapeHtml(itemManufacturer(item, language))}<small>${source}</small></td><td class="num">${quantity}</td><td>${escapeHtml(itemUnit(item, language))}</td><td class="num">${price}</td><td class="num">${amount}</td></tr>`;
     }).join('');
-    const generatedAt = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'long' }).format(new Date());
+    const generatedAt = longDateFormatter(language).format(new Date());
     const preview = previewUrl && previewApprovedAt ? `<img class="preview" src="${previewUrl}" alt="Human-reviewed AI interior preview">` : previewUrl ? `<div class="preview empty">${t('AIプレビューは未承認のため提案書から除外', 'AI preview omitted because human approval is pending')}</div>` : `<div class="preview empty">${t('AIプレビュー未生成', 'AI preview not generated')}</div>`;
     const measurementSummary = surfaceEstimate
       ? `<div class="measurement"><strong>${t('写真からのAI面積概算', 'AI photo-based area estimate')}</strong><span>${t('床', 'Floor')} ${surfaceEstimate.floorAreaM2} m² · ${t('壁（開口控除）', 'Walls (net)')} ${surfaceEstimate.netWallAreaM2} m² · ${t('天井', 'Ceiling')} ${surfaceEstimate.ceilingAreaM2} m²</span><small>${escapeHtml(language === 'ja' ? surfaceEstimate.assumptionJa : surfaceEstimate.assumptionEn)}</small></div>`
@@ -958,14 +946,14 @@ export default function InteriorProposalApp() {
     <div><span>{t('床', 'Floor')}</span><strong>{displayedSurfaceEstimate.floorAreaM2} m²</strong></div>
     <div><span>{t('壁（開口控除）', 'Walls (net)')}</span><strong>{displayedSurfaceEstimate.netWallAreaM2} m²</strong></div>
     <div><span>{t('天井', 'Ceiling')}</span><strong>{displayedSurfaceEstimate.ceilingAreaM2} m²</strong></div>
-    <p><b>{displayedSurfaceEstimate.roomWidthM} × {displayedSurfaceEstimate.roomDepthM} × H{displayedSurfaceEstimate.ceilingHeightM} m</b><span>{t('信頼度', 'Confidence')}: {displayedSurfaceEstimate.confidence === 'high' ? t('高', 'High') : displayedSurfaceEstimate.confidence === 'medium' ? t('中', 'Medium') : t('低', 'Low')}</span><small>{language === 'ja' ? displayedSurfaceEstimate.assumptionJa : displayedSurfaceEstimate.assumptionEn}</small>{Boolean(displayedSurfaceEstimate.validationIssues?.length) && <em>⚠ {t(`${displayedSurfaceEstimate.validationIssues?.length}件の整合性警告`, `${displayedSurfaceEstimate.validationIssues?.length} validation warning(s)`)}</em>}</p>
+    <p><b>{displayedSurfaceEstimate.roomWidthM} × {displayedSurfaceEstimate.roomDepthM} × H{displayedSurfaceEstimate.ceilingHeightM} m</b><span>{t('概算', 'Estimate')} · {displayedSurfaceEstimate.confidence === 'high' ? t('高信頼', 'high confidence') : displayedSurfaceEstimate.confidence === 'medium' ? t('標準', 'standard') : t('参考値', 'indicative')}</span><small>{language === 'ja' ? displayedSurfaceEstimate.assumptionJa : displayedSurfaceEstimate.assumptionEn}</small></p>
   </>;
 
   return (
     <div className="studio-app">
       <header className="studio-header">
         <a href="#studio" className="studio-brand"><strong>Archi<span>X</span></strong><small>Interior Proposal POC</small></a>
-        <div className="studio-header-actions"><span className={`project-save-state ${saveState}`}>{saveState === 'saving' ? t('保存中…', 'Saving…') : saveState === 'unavailable' ? t('このブラウザでは保存不可', 'Local save unavailable') : `✓ ${t('ローカル保存済み', 'Saved locally')}${savedAt ? ` · ${new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { hour: '2-digit', minute: '2-digit' }).format(new Date(savedAt))}` : ''}`}</span><div className="language-toggle" role="group" aria-label="Language"><button className={language === 'ja' ? 'active' : ''} onClick={() => setLanguage('ja')}>日本語</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div>
+        <div className="studio-header-actions"><span className={`project-save-state ${saveState}`}>{saveState === 'saving' ? t('保存中…', 'Saving…') : saveState === 'unavailable' ? t('このブラウザでは保存不可', 'Local save unavailable') : `✓ ${t('ローカル保存済み', 'Saved locally')}${savedAt ? ` · ${timeFormatter(language).format(new Date(savedAt))}` : ''}`}</span><div className="language-toggle" role="group" aria-label="Language"><button className={language === 'ja' ? 'active' : ''} onClick={() => setLanguage('ja')}>日本語</button><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button></div></div>
       </header>
 
       <main id="studio" className="studio-main">
@@ -996,7 +984,7 @@ export default function InteriorProposalApp() {
               const isRendering = previewLoading && roomTab.id === activeRoomId;
               const isEstimating = estimateLoading && roomTab.id === activeRoomId;
               const status = isRendering ? 'rendering' : isEstimating ? 'estimating' : draft?.previewUrl && (draft.previewStale || !draft.previewApprovedAt) ? 'pending' : draft?.previewUrl ? 'rendered' : 'not-rendered';
-              const statusCopy = status === 'rendering' ? t('生成・検証中', 'Rendering & checking') : status === 'estimating' ? t('面積候補を推定中', 'Estimating suggestion') : status === 'pending' ? draft?.previewStale ? t('変更あり', 'Changes pending') : t('人の確認待ち', 'Human review required') : status === 'rendered' ? t('確認済み', 'Approved') : t('未生成', 'Not rendered');
+              const statusCopy = status === 'rendering' ? t('生成中', 'Rendering') : status === 'estimating' ? t('面積候補を推定中', 'Estimating suggestion') : status === 'pending' ? draft?.previewStale ? t('変更あり', 'Changes pending') : t('確認待ち', 'Ready to review') : status === 'rendered' ? t('デモ準備済み', 'Demo ready') : t('未生成', 'Not rendered');
               return <div key={roomTab.id} className={`room-tab-shell ${workspaceView === 'room' && roomTab.id === activeRoomId ? 'active' : ''}`}>
                 <button role="tab" aria-selected={workspaceView === 'room' && roomTab.id === activeRoomId} className="room-tab" disabled={previewLoading || estimateLoading} onClick={() => switchRoom(roomTab.id)}>
                   <span className={`room-status-dot ${status}`} aria-hidden="true" />
@@ -1013,8 +1001,8 @@ export default function InteriorProposalApp() {
           <label><span>{t('案件名', 'Project')}</span><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label><span>{t('顧客', 'Customer')}</span><input value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label>
           {workspaceView === 'room' && room.custom && <label><span>{t('部屋名', 'Room name')}</span><input value={room[language]} onChange={(event) => renameActiveRoom(event.target.value)} /></label>}
-          {workspaceView === 'room' && <label><span>{t('スタイル', 'Style')}</span><select value={style} onChange={(event) => updateActiveDraft({ style: event.target.value, previewStale: Boolean(previewUrl), previewVerification: undefined, previewApprovedAt: undefined })}>{STYLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option[language === 'ja' ? 'ja' : 'en']}</option>)}</select></label>}
-          {workspaceView === 'room' && <label className="brief-field"><span>{t('要望', 'Brief')}</span><input value={requestNote} onChange={(event) => updateActiveDraft({ requestNote: event.target.value, previewStale: Boolean(previewUrl), previewVerification: undefined, previewApprovedAt: undefined })} /></label>}
+          {workspaceView === 'room' && <label><span>{t('スタイル', 'Style')}</span><select value={style} onChange={(event) => updateActiveDraft({ style: event.target.value, previewStale: Boolean(previewUrl), previewApprovedAt: undefined })}>{STYLE_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option[language === 'ja' ? 'ja' : 'en']}</option>)}</select></label>}
+          {workspaceView === 'room' && <label className="brief-field"><span>{t('要望', 'Brief')}</span><input value={requestNote} onChange={(event) => updateActiveDraft({ requestNote: event.target.value, previewStale: Boolean(previewUrl), previewApprovedAt: undefined })} /></label>}
         </section>
 
         <div className={`workspace-pane ${workspaceView === 'floorplan' ? '' : 'is-inactive'}`} aria-hidden={workspaceView !== 'floorplan'}>
@@ -1047,27 +1035,28 @@ export default function InteriorProposalApp() {
                 <button className="estimate-basis-link" onClick={() => setWorkspaceView('floorplan')}>{t('平面図を開く', 'Open the floorplan')} →</button>
               </section>
               : <section className="surface-estimator" aria-label={t('面積の自動推定', 'Automatic surface estimate')}>
-                <div className="estimate-intro"><span>AI AREA SUGGESTION</span><strong>{estimateLoading ? t('写真から面積候補を推定中…', 'Estimating an area suggestion…') : surfaceEstimateSuggestion ? t('AI候補を確認してください', 'Review the AI suggestion') : surfaceEstimate ? t('確認済み数量を使用中', 'Using reviewed quantities') : t('写真アップロード時に候補を作成', 'Suggestion generated on upload')}</strong><small>{surfaceEstimateSuggestion ? t('この候補はまだ数量・金額へ反映されていません。', 'This suggestion is not yet used in quantities or totals.') : t('AI候補は確認して承認するまで見積へ反映されません。', 'AI suggestions do not affect estimates until explicitly approved.')}</small></div>
+                <div className="estimate-intro"><span>OPTIONAL AI AREA SUGGESTION</span><strong>{estimateLoading ? t('写真から面積候補を推定中…', 'Estimating an area suggestion…') : surfaceEstimateSuggestion ? t('AI候補を確認してください', 'Review the AI suggestion') : surfaceEstimate ? t('確認済み数量を使用中', 'Using reviewed quantities') : t('必要な場合だけ面積候補を作成', 'Estimate only when needed')}</strong><small>{surfaceEstimateSuggestion ? t('この候補はまだ数量・金額へ反映されていません。', 'This suggestion is not yet used in quantities or totals.') : t('自動実行しません。「候補を推定」を押した場合のみAIを1回使用します。', 'Nothing runs automatically. AI is used once only when you click “Estimate suggestion”.')}</small></div>
                 <label className="height-input"><span>{t('想定天井高', 'Assumed height')}</span><div><input type="number" min="2" max="5" step="0.1" value={assumedCeilingHeight} onChange={(event) => updateActiveDraft({ assumedCeilingHeight: Number(event.target.value) || 2.4 })} /><em>m</em></div></label>
                 <button className="estimate-button" disabled={!sourcePhotoData || estimateLoading} onClick={estimateSurfaces}>{estimateLoading ? t('推定中…', 'Estimating…') : displayedSurfaceEstimate ? t('別の候補を推定', 'Generate another suggestion') : t('候補を推定', 'Estimate suggestion')}</button>
                 {surfaceFigures && <div className={`estimate-result ${surfaceEstimateSuggestion ? 'pending-review' : 'reviewed'}`}>
                   {surfaceFigures}
                   {surfaceEstimateSuggestion && <div className="estimate-review-actions"><button onClick={discardSurfaceEstimate}>{t('破棄', 'Discard')}</button><button className="approve" onClick={acceptSurfaceEstimate}>{t('確認して数量へ反映', 'Approve and use quantities')}</button></div>}
                 </div>}
-                {estimateError && <div className="estimate-error">{estimateError}</div>}
+                {estimateError && <div className="estimate-error demo-notice">{estimateError}</div>}
               </section>}
 
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => loadSourcePhoto(event.target.files?.[0])} />
             <div className={`visual-stage ${dragActive ? 'dragging' : ''} ${!sourcePhotoUrl ? 'empty' : ''}`} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); loadSourcePhoto(event.dataTransfer.files[0]); }} onClick={() => { if (!sourcePhotoUrl) fileInputRef.current?.click(); }} role={!sourcePhotoUrl ? 'button' : undefined} tabIndex={!sourcePhotoUrl ? 0 : undefined} onKeyDown={(event) => { if (!sourcePhotoUrl && event.key === 'Enter') fileInputRef.current?.click(); }}>
               {previewLoading ? <div className="rendering-message"><span className="studio-spinner" /><strong>{t('選んだ変更を反映しています', 'Applying your selected changes')}</strong><small>{t('30〜90秒ほどかかります', 'Usually 30–90 seconds')}</small></div>
-                : viewMode === 'preview' && previewUrl ? <><img src={previewUrl} alt={t('変更後の室内', 'Updated room')} />{previewStale && <span className="stale-chip">{t('選択が変わりました · もう一度生成してください', 'Selections changed · render again')}</span>}{previewVerification && !previewStale && <span className={`verification-chip ${previewVerification.status}`}>{previewApprovedAt ? `✓ ${t('人が確認済み', 'Human approved')}` : previewVerification.status === 'pass' ? t('自動検証合格 · 人の確認待ち', 'Automated check passed · human review required') : previewVerification.status === 'fail' ? t('構造変更の可能性 · 再生成推奨', 'Possible structural changes · regenerate') : t('要確認 · 人の確認が必要', 'Review required · human approval needed')}</span>}</>
+                : viewMode === 'preview' && previewUrl ? <><img src={previewUrl} alt={t('変更後の室内', 'Updated room')} />{previewStale && <span className="stale-chip">{t('選択が変わりました · 必要なら更新', 'Selections changed · update if needed')}</span>}{!previewStale && <span className="verification-chip pass">{previewApprovedAt ? `✓ ${t('デモ準備済み', 'Demo ready')}` : t('プレビュー完成 · 簡易確認待ち', 'Preview ready · quick review')}</span>}</>
                   : sourcePhotoUrl ? <img src={sourcePhotoUrl} alt={t('元の室内写真', 'Original room')} />
-                    : <div className="upload-message"><span>＋</span><strong>{room[language]} · {t('写真をアップロード', 'Upload a photo')}</strong><small>PNG / JPEG · {usesFloorplanTakeoff ? t('最大12MB · 数量は平面図から取得済み', '12 MB max · quantities already taken from the floorplan') : t('最大12MB · 面積は自動推定されます', '12 MB max · areas estimated automatically')}</small></div>}
+                    : <div className="upload-message"><span>＋</span><strong>{room[language]} · {t('写真をアップロード', 'Upload a photo')}</strong><small>PNG / JPEG · {usesFloorplanTakeoff ? t('最大12MB · 数量は平面図から取得済み', '12 MB max · quantities already taken from the floorplan') : t('最大12MB · 面積推定は任意', '12 MB max · area estimate is optional')}</small></div>}
             </div>
 
-            {previewError && <div className="render-error"><strong>{t('生成できませんでした', 'Could not generate')}</strong><span>{previewError}</span></div>}
-            {previewVerification && previewUrl && !previewStale && <div className={`preview-verification-panel ${previewVerification.status}`}><div><span>AI OUTPUT AUDIT</span><strong>{t(`構造 ${previewVerification.structureScore} / 仕上げ ${previewVerification.scheduleScore}`, `Structure ${previewVerification.structureScore} / schedule ${previewVerification.scheduleScore}`)}</strong><small>{previewVerification.issues[0] || t('自動検証は補助情報です。元写真と選定内容を目視確認してください。', 'Automated verification is advisory; compare the source and schedule visually.')}</small></div>{!previewApprovedAt && previewVerification.status !== 'fail' && <button onClick={approvePreview}>{t('元写真と選定内容を確認して承認', 'I compared and approve this preview')}</button>}</div>}
+            {previewError && <div className="render-error demo-notice"><strong>{t('今回は生成されませんでした', 'Not generated this time')}</strong><span>{previewError}</span></div>}
+            {previewUrl && !previewStale && <div className="preview-verification-panel pass"><div><span>DEMO REVIEW</span><strong>{previewApprovedAt ? t('このプレビューはデモで使用できます', 'This preview is ready for the demo') : t('見た目を簡単に確認してください', 'Give the result a quick visual check')}</strong><small>{t('クレジット節約のため追加のAI監査と自動再試行は行いません。', 'To save credits, no additional AI audit or automatic retry is run.')}</small></div>{!previewApprovedAt && <button onClick={approvePreview}>{t('見た目を確認して使用', 'Looks good — use it')}</button>}</div>}
             <div className="render-bar">
+              <small className="render-credit-note">{t('クリック時に画像生成1回 · 自動再試行なし', 'One image call per click · no automatic retry')}</small>
               <button className="render-button" disabled={previewLoading || estimateLoading || !sourcePhotoData || !selectedItems.length} onClick={generatePreview}>{previewLoading ? `${room[language]} ${t('生成中…', 'rendering…')}` : estimateLoading ? t('面積を推定しています…', 'Estimating room size…') : previewUrl ? t(`${room.ja}を再生成`, `Update ${room.en} render`) : t(`${room.ja}を生成`, `Render ${room.en}`)} <span>→</span></button>
             </div>
           </div>
