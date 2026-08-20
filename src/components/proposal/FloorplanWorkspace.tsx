@@ -48,6 +48,12 @@ const FLOOR_MATERIAL_GROUPS = [
   { id: 'carpet', labelJa: 'カーペット', labelEn: 'Carpet', items: FLOOR_MATERIALS.filter((item) => item.id.includes('carpet')) },
   { id: 'tile', labelJa: 'タイル・石目', labelEn: 'Tile & stone', items: FLOOR_MATERIALS.filter((item) => item.id.includes('tile')) },
 ];
+const WALL_MATERIALS = CATALOG.filter((item) => item.slot === 'walls');
+const WALL_MATERIAL_GROUPS = [
+  { id: 'base', labelJa: 'ベースクロス', labelEn: 'Base wallcovering', items: WALL_MATERIALS.filter((item) => item.id.includes('vinyl')) },
+  { id: 'accent', labelJa: 'アクセントクロス', labelEn: 'Accent wallcovering', items: WALL_MATERIALS.filter((item) => item.id.includes('accent')) },
+  { id: 'panel', labelJa: '木質パネル', labelEn: 'Wood panel', items: WALL_MATERIALS.filter((item) => item.id.includes('panel')) },
+];
 const FLOOR_TEXTURE_MODULES: Record<string, { widthM: number; lengthM: number; label: string }> = {
   'floor-wide-natural': { widthM: 0.12, lengthM: 0.9, label: '120 × 900 mm plank' },
   'floor-wide-light': { widthM: 0.12, lengthM: 0.9, label: '120 × 900 mm plank' },
@@ -97,6 +103,17 @@ const defaultFloorMaterialId = (room: FloorplanRoom) => {
   return 'floor-wide-natural';
 };
 
+const defaultWallMaterialId = (room: FloorplanRoom) => {
+  const searchableName = `${room.nameJa} ${room.nameEn}`.toLowerCase();
+  if (room.roomType === 'bathroom' || /bath|toilet|wash|laundry|浴|洗面|便所|トイレ/.test(searchableName)) return 'wall-vinyl-white';
+  if (room.roomType === 'kitchen' || /kitchen|pantry|キッチン|台所/.test(searchableName)) return 'wall-vinyl-white';
+  if (/entry|entrance|genkan|玄関|土間/.test(searchableName)) return 'wall-accent-greige';
+  if (room.roomType === 'bedroom' || /bed|寝室|洋室/.test(searchableName)) return 'wall-accent-sage';
+  if (room.roomType === 'dining') return 'wall-accent-greige';
+  if (room.roomType === 'living') return 'wall-vinyl-warm-white';
+  return 'wall-vinyl-warm-white';
+};
+
 const isCriticalValidationIssue = (issue: string) => /missing|degenerate|self-intersect/i.test(issue);
 
 export default function FloorplanWorkspace({ language }: Props) {
@@ -127,6 +144,7 @@ export default function FloorplanWorkspace({ language }: Props) {
   const [renameDraft, setRenameDraft] = useState('');
   const [renameError, setRenameError] = useState<string>();
   const [roomFloorMaterials, setRoomFloorMaterials] = useState<Record<string, string>>({});
+  const [roomWallMaterials, setRoomWallMaterials] = useState<Record<string, string>>({});
   const [renderStyle, setRenderStyle] = useState<FloorplanRenderStyle>('watercolor');
   const [floorplanView, setFloorplanView] = useState<FloorplanView>('plan');
   const [renderedFloorplan, setRenderedFloorplan] = useState<string>();
@@ -291,6 +309,7 @@ export default function FloorplanWorkspace({ language }: Props) {
       setFileName(file.name);
       setAnalysis(undefined);
       setRoomFloorMaterials({});
+      setRoomWallMaterials({});
       setRenderedFloorplan(undefined);
       setFloorplanView('plan');
       setFloorplanRenderStale(false);
@@ -328,6 +347,7 @@ export default function FloorplanWorkspace({ language }: Props) {
       const nextAnalysis = { ...payload.analysis, model: payload.model, promptVersion: payload.promptVersion } as FloorplanAnalysis;
       setAnalysis(nextAnalysis);
       setRoomFloorMaterials(Object.fromEntries(nextAnalysis.rooms.map((room) => [room.id, defaultFloorMaterialId(room)])));
+      setRoomWallMaterials(Object.fromEntries(nextAnalysis.rooms.map((room) => [room.id, defaultWallMaterialId(room)])));
       setRenderedFloorplan(undefined);
       setFloorplanView('plan');
       setFloorplanRenderStale(false);
@@ -354,6 +374,12 @@ export default function FloorplanWorkspace({ language }: Props) {
     if (renderedFloorplan) setFloorplanRenderStale(true);
   };
 
+  const selectRoomWallMaterial = (roomId: string, materialId: string) => {
+    setRoomWallMaterials((current) => ({ ...current, [roomId]: materialId }));
+    setFloorplanRenderError(undefined);
+    if (renderedFloorplan) setFloorplanRenderStale(true);
+  };
+
   const chooseRenderStyle = (style: FloorplanRenderStyle) => {
     setRenderStyle(style);
     setFloorplanRenderError(undefined);
@@ -366,9 +392,10 @@ export default function FloorplanWorkspace({ language }: Props) {
     if (renderedFloorplan) setFloorplanRenderStale(true);
   };
 
-  const autoAssignFloorMaterials = () => {
+  const autoAssignMaterials = () => {
     if (!analysis) return;
     setRoomFloorMaterials(Object.fromEntries(analysis.rooms.map((room) => [room.id, defaultFloorMaterialId(room)])));
+    setRoomWallMaterials(Object.fromEntries(analysis.rooms.map((room) => [room.id, defaultWallMaterialId(room)])));
     setFloorplanView('plan');
     setFloorplanRenderError(undefined);
     if (renderedFloorplan) setFloorplanRenderStale(true);
@@ -387,9 +414,13 @@ export default function FloorplanWorkspace({ language }: Props) {
 
   const renderColorFloorplan = async () => {
     if (!imageData || !analysis || renderInFlightRef.current) return;
-    const scheduledRooms = analysis.rooms.map((room) => ({ room, material: FLOOR_MATERIALS.find((item) => item.id === roomFloorMaterials[room.id]) }));
-    if (scheduledRooms.some(({ material }) => !material)) {
-      setFloorplanRenderError(t('すべての部屋に床材を選択してください。', 'Choose a floor material for every room.'));
+    const scheduledRooms = analysis.rooms.map((room) => ({
+      room,
+      material: FLOOR_MATERIALS.find((item) => item.id === roomFloorMaterials[room.id]),
+      wall: WALL_MATERIALS.find((item) => item.id === roomWallMaterials[room.id]),
+    }));
+    if (scheduledRooms.some(({ material, wall }) => !material || !wall)) {
+      setFloorplanRenderError(t('すべての部屋に床材と壁材を選択してください。', 'Choose a floor and a wall material for every room.'));
       return;
     }
 
@@ -405,13 +436,18 @@ export default function FloorplanWorkspace({ language }: Props) {
           style: renderStyle,
           doorWidthM: analysis.assumedDoorWidthM || doorWidth,
           textureScalePercent,
-          rooms: scheduledRooms.map(({ room, material }) => {
+          rooms: scheduledRooms.map(({ room, material, wall }) => {
             const textureGeometry = roomTextureGeometry(room, material!.id);
             return {
               name: language === 'ja' ? room.nameJa : room.nameEn,
               materialName: language === 'ja' ? material!.nameJa : material!.nameEn,
               materialColor: language === 'ja' ? material!.colorJa : material!.colorEn,
               specification: language === 'ja' ? material!.specificationJa : material!.specificationEn,
+              wallMaterialName: language === 'ja' ? wall!.nameJa : wall!.nameEn,
+              wallMaterialColor: language === 'ja' ? wall!.colorJa : wall!.colorEn,
+              wallSpecification: language === 'ja' ? wall!.specificationJa : wall!.specificationEn,
+              wallSwatchHex: wall!.swatch,
+              wallIsAccent: wall!.id.includes('accent') || wall!.id.includes('panel'),
               textureModule: FLOOR_TEXTURE_MODULES[material!.id]?.label || material!.size,
               moduleWidthM: FLOOR_TEXTURE_MODULES[material!.id]?.widthM,
               moduleLengthM: FLOOR_TEXTURE_MODULES[material!.id]?.lengthM,
@@ -592,6 +628,7 @@ export default function FloorplanWorkspace({ language }: Props) {
       validationIssues: [...new Set([...(analysis.validationIssues || []), geometryIssue])],
     });
     setRoomFloorMaterials((current) => ({ ...current, [nextId]: defaultFloorMaterialId(nextRoom) }));
+    setRoomWallMaterials((current) => ({ ...current, [nextId]: defaultWallMaterialId(nextRoom) }));
     if (renderedFloorplan) setFloorplanRenderStale(true);
     if (!manualPixelsPerMeter) setOutlineNeedsCalibration(true);
     cancelGeometryTool();
@@ -637,6 +674,7 @@ export default function FloorplanWorkspace({ language }: Props) {
       validationIssues: [...new Set([...(analysis.validationIssues || []), geometryIssue])],
     });
     setRoomFloorMaterials((current) => ({ ...current, [nextId]: current[sourceRoom.id] || defaultFloorMaterialId(sourceRoom) }));
+    setRoomWallMaterials((current) => ({ ...current, [nextId]: current[sourceRoom.id] || defaultWallMaterialId(sourceRoom) }));
     if (renderedFloorplan) setFloorplanRenderStale(true);
     if (!manualPixelsPerMeter) setOutlineNeedsCalibration(true);
     cancelGeometryTool();
@@ -753,7 +791,8 @@ export default function FloorplanWorkspace({ language }: Props) {
     }
   };
 
-  const selectedMaterialCount = analysis?.rooms.filter((room) => FLOOR_MATERIALS.some((item) => item.id === roomFloorMaterials[room.id])).length || 0;
+  const selectedMaterialCount = analysis?.rooms.filter((room) => FLOOR_MATERIALS.some((item) => item.id === roomFloorMaterials[room.id])
+    && WALL_MATERIALS.some((item) => item.id === roomWallMaterials[room.id])).length || 0;
   const vectorPixelsPerMeter = analysis ? manualPixelsPerMeter || inferPixelsPerMeter(analysis.rooms) : undefined;
   const roomPatternId = (roomId: string) => `floor-pattern-${roomId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const roomTextureGeometry = (room: FloorplanRoom, materialId: string) => {
@@ -814,7 +853,7 @@ export default function FloorplanWorkspace({ language }: Props) {
   return <section className="floorplan-workspace" aria-label={t('カラー平面図の作成', 'Color floorplan creation')}>
     <div className="floorplan-main-panel">
       <header className="floorplan-header">
-        <div><span>VECTOR COLOR + AI PRESENTATION</span><h2>{t('図面構造を保ち、平面図全体を自動カラー化', 'Automatically colorize the complete plan without changing its structure')}</h2><p>{t('部屋検出後、床材・方向・タイルグリッドを自動設定し、正確なベクターカラー図を作成。必要な場合だけAIで最終表現を生成します。', 'After room detection, materials, plank direction, and tile grids are assigned automatically in an accurate vector plan. AI is used only for an optional presentation render.')}</p></div>
+        <div><span>VECTOR COLOR + AI PRESENTATION</span><h2>{t('図面構造を保ち、平面図全体を自動カラー化', 'Automatically colorize the complete plan without changing its structure')}</h2><p>{t('部屋検出後、床・壁の仕上げと方向・タイルグリッドを自動設定し、正確なベクターカラー図を作成。最終レンダーでは家具・建具・設備まで同じスタイルで着彩します。', 'After room detection, floor and wall finishes, plank direction, and tile grids are assigned automatically in an accurate vector plan. The final render colours furniture, joinery, and fixtures in the same style.')}</p></div>
         <button className="change-photo" disabled={loading || renderingFloorplan} onClick={() => inputRef.current?.click()}>{imageUrl ? t('平面図を変更', 'Change floorplan') : t('平面図を選択', 'Choose floorplan')}</button>
       </header>
 
@@ -836,7 +875,7 @@ export default function FloorplanWorkspace({ language }: Props) {
             onPointerLeave={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) endPointerGesture(event); }}
             onDoubleClick={resetView} onClickCapture={(event) => { if (movedRef.current) { event.preventDefault(); event.stopPropagation(); movedRef.current = false; } }}>
             <div ref={canvasRef} className="floorplan-canvas" style={{ width: fittedSize.width, height: fittedSize.height }}><img src={activeImageUrl} alt={floorplanView === 'render' ? t('生成したカラー平面図', 'Rendered color floorplan') : t('アップロードした平面図', 'Uploaded floorplan')} draggable={false} onLoad={(event) => floorplanView === 'render' ? setRenderImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight }) : setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
-            {analysis && floorplanView === 'plan' && <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={t('検出された部屋と床材', 'Detected rooms and floor materials')}>
+            {analysis && floorplanView === 'plan' && <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={t('検出された部屋と仕上げ', 'Detected rooms and finishes')}>
               <defs>{analysis.rooms.map((room) => {
                 const material = FLOOR_MATERIALS.find((item) => item.id === roomFloorMaterials[room.id]);
                 return material ? vectorFloorPattern(room, material.id, material.swatch) : null;
@@ -881,7 +920,7 @@ export default function FloorplanWorkspace({ language }: Props) {
             <button className={geometryTool === 'draw-room' ? 'active' : ''} disabled={!analysis} onClick={() => geometryTool === 'draw-room' ? cancelGeometryTool() : beginDrawRoom()}>{t('部屋を描画', 'Draw room')}</button>
             {manualPixelsPerMeter && <span>✓ {t('手動補正済み', 'Manually calibrated')}</span>}
           </div>}
-          {floorplanView === 'render' && floorplanRenderStale && <div className="floorplan-render-stale">{t('床材またはスタイルが変更されました · 再生成してください', 'Materials or style changed · render again')}</div>}
+          {floorplanView === 'render' && floorplanRenderStale && <div className="floorplan-render-stale">{t('仕上げまたはスタイルが変更されました · 再生成してください', 'Finishes or style changed · render again')}</div>}
           {floorplanView === 'plan' && calibrationMode && <div className="floorplan-calibration-editor" onPointerDown={(event) => event.stopPropagation()}>
             <div><strong>{t('既知寸法の両端をクリック', 'Click both ends of a known dimension')}</strong><small>{calibrationPoints.length}/2 {t('点を選択', 'points selected')}</small></div>
             <label><span>{t('実寸', 'Actual length')}</span><input type="number" min="0.1" step="0.1" value={calibrationLengthM} onChange={(event) => setCalibrationLengthM(Number(event.target.value) || 1)} /><em>m</em></label>
@@ -893,7 +932,7 @@ export default function FloorplanWorkspace({ language }: Props) {
             <button disabled={geometryTool === 'draw-room' ? drawPoints.length < 3 : splitPoints.length !== 2} onClick={geometryTool === 'draw-room' ? finishDrawnRoom : finishRoomSplit}>{geometryTool === 'draw-room' ? t('部屋を追加', 'Add room') : t('分割を適用', 'Apply split')}</button>
           </div>}
           {!calibrationMode && !geometryTool && <div className="floorplan-gesture-hint">{t('スクロールで拡大 · ドラッグで移動 · 2本指でピンチ', 'Scroll to zoom · drag to pan · pinch with two fingers')}</div>}</>
-          : <div className="upload-message"><span>＋</span><strong>{t('白黒の平面図をアップロード', 'Upload a black-and-white floorplan')}</strong><small>PNG / JPEG · {t('最大12MB', '12 MB max')}</small><em>{t('AIが部屋を検出した後、各室の床材と仕上がりスタイルを選べます。', 'AI will detect the rooms, then you can assign floors and choose a presentation style.')}</em></div>}
+          : <div className="upload-message"><span>＋</span><strong>{t('白黒の平面図をアップロード', 'Upload a black-and-white floorplan')}</strong><small>PNG / JPEG · {t('最大12MB', '12 MB max')}</small><em>{t('AIが部屋を検出した後、各室の床材・壁材と仕上がりスタイルを選べます。', 'AI will detect the rooms, then you can assign floors and walls and choose a presentation style.')}</em></div>}
       </div>
 
       <footer className="floorplan-controls">
@@ -905,14 +944,15 @@ export default function FloorplanWorkspace({ language }: Props) {
     </div>
 
     <aside className="floorplan-room-panel">
-      <div className="changes-heading"><div><span>ROOM FLOOR MATERIALS</span><h2>{t('部屋ごとの床材', 'Floors by room')}</h2></div><strong>{analysis ? `${selectedMaterialCount}/${analysis.rooms.length}` : '0'}</strong></div>
+      <div className="changes-heading"><div><span>ROOM FINISH MATERIALS</span><h2>{t('部屋ごとの仕上げ', 'Finishes by room')}</h2></div><strong>{analysis ? `${selectedMaterialCount}/${analysis.rooms.length}` : '0'}</strong></div>
       {analysis ? <>
         <div className="floorplan-calibration"><span>{t('縮尺基準', 'Scale reference')}</span><strong>{manualPixelsPerMeter ? t('手動寸法', 'Manual dimension') : analysis.scaleSource === 'explicit-dimension' ? t('図面記載寸法', 'Written dimension') : analysis.scaleSource === 'door-width' ? `${analysis.assumedDoorWidthM.toFixed(2)} m ${t('ドア', 'door')}` : t('概算', 'Estimate')}</strong><small>{analysis.scaleEvidence || t(`ドア ${analysis.detectedDoorCount}箇所を検出`, `${analysis.detectedDoorCount} door(s) detected`)} · {analysis.confidence === 'high' ? t('詳細', 'Detailed') : analysis.confidence === 'medium' ? t('標準', 'Standard') : t('参考値', 'Indicative')}</small></div>
-        <button className="floorplan-auto-materials" onClick={autoAssignFloorMaterials}><span>✦</span><strong>{t('全室の床材を自動提案', 'Auto-assign all floor materials')}</strong><small>{t('室名と用途から選択 · 方向とグリッドも自動整列', 'Uses room type · also aligns plank direction and tile grids')}</small></button>
+        <button className="floorplan-auto-materials" onClick={autoAssignMaterials}><span>✦</span><strong>{t('全室の床・壁を自動提案', 'Auto-assign all floors and walls')}</strong><small>{t('室名と用途から選択 · 方向とグリッドも自動整列', 'Uses room type · also aligns plank direction and tile grids')}</small></button>
         <div className="detected-room-list">
           {analysis.rooms.map((detectedRoom, index) => {
             const criticalRoomIssues = (detectedRoom.validationIssues || []).filter(isCriticalValidationIssue);
             const selectedMaterial = FLOOR_MATERIALS.find((item) => item.id === roomFloorMaterials[detectedRoom.id]);
+            const selectedWall = WALL_MATERIALS.find((item) => item.id === roomWallMaterials[detectedRoom.id]);
             return <article className={`detected-room-card selected ${editingRoomId === detectedRoom.id ? 'editing' : ''} ${renamingRoomId === detectedRoom.id ? 'renaming' : ''}`} key={detectedRoom.id}>
               <div className="detected-room-title"><span className="room-index" style={{ background: ROOM_COLORS[index % ROOM_COLORS.length] }}>{index + 1}</span><span><strong>{language === 'ja' ? detectedRoom.nameJa : detectedRoom.nameEn}</strong><small>{detectedRoom.floorAreaM2.toFixed(1)} m² · {detectedRoom.roomWidthM.toFixed(1)} × {detectedRoom.roomDepthM.toFixed(1)} m</small>{Boolean(criticalRoomIssues.length) && <em className="room-validation-warning">⚠ {t('輪郭を確認してください', 'Outline needs attention')}</em>}</span></div>
               {renamingRoomId === detectedRoom.id && <form className="room-rename-editor" onSubmit={saveRoomRename} onKeyDown={(event) => { if (event.key === 'Escape') cancelRoomRename(); }}>
@@ -920,6 +960,7 @@ export default function FloorplanWorkspace({ language }: Props) {
                 {renameError && <em>{renameError}</em>}
                 <div><button type="button" onClick={cancelRoomRename}>{t('キャンセル', 'Cancel')}</button><button type="submit">{t('名前を保存', 'Save name')}</button></div>
               </form>}
+              <div className="room-material-pickers">
               <label className="room-material-picker">
                 <i style={{ background: selectedMaterial?.swatch || '#e5e7eb' }} />
                 <span><small>{t('床材', 'Floor material')}</small><select value={roomFloorMaterials[detectedRoom.id] || ''} onChange={(event) => selectRoomFloorMaterial(detectedRoom.id, event.target.value)}>
@@ -929,6 +970,16 @@ export default function FloorplanWorkspace({ language }: Props) {
                   </optgroup>)}
                 </select></span>
               </label>
+              <label className="room-material-picker">
+                <i style={{ background: selectedWall?.swatch || '#e5e7eb' }} />
+                <span><small>{t('壁材', 'Wall material')}</small><select value={roomWallMaterials[detectedRoom.id] || ''} onChange={(event) => selectRoomWallMaterial(detectedRoom.id, event.target.value)}>
+                  <option value="" disabled>{t('壁材を選択', 'Choose a wall')}</option>
+                  {WALL_MATERIAL_GROUPS.map((group) => <optgroup key={group.id} label={language === 'ja' ? group.labelJa : group.labelEn}>
+                    {group.items.map((material) => <option key={material.id} value={material.id}>{language === 'ja' ? `${material.nameJa} · ${material.colorJa}` : `${material.nameEn} · ${material.colorEn}`}</option>)}
+                  </optgroup>)}
+                </select></span>
+              </label>
+              </div>
               <div className="room-geometry-actions">
                 <button className={renamingRoomId === detectedRoom.id ? 'rename-room-button active' : 'rename-room-button'} onClick={() => renamingRoomId === detectedRoom.id ? cancelRoomRename() : beginRoomRename(detectedRoom)}>{t('名前を変更', 'Rename')}</button>
                 <button className="edit-outline-button" onClick={() => { cancelGeometryTool(); cancelRoomRename(); setEditingRoomId((current) => current === detectedRoom.id ? undefined : detectedRoom.id); setCalibrationMode(false); setCalibrationPoints([]); }}>{editingRoomId === detectedRoom.id ? t('編集を終了', 'Finish editing') : t('輪郭を編集', 'Edit outline')}</button>
@@ -944,20 +995,21 @@ export default function FloorplanWorkspace({ language }: Props) {
         </div>
         <div className="floorplan-render-panel">
           <div className="floorplan-render-heading"><span>STEP 03</span><strong>{t('図面全体のスタイル', 'Whole-plan style')}</strong></div>
-          <div className="floorplan-structure-lock"><b>STRUCTURE LOCK</b><span>{t('部屋数・隣接関係・壁・開口・建具・設備位置を元図面に固定', 'Locks room count, adjacency, walls, openings, doors, and fixed elements to the source')}</span></div>
+          <div className="floorplan-structure-lock"><b>STRUCTURE LOCK</b><span>{t('部屋数・隣接関係・壁・開口・建具・設備位置を元図面に固定。着彩は全要素、追加はしません。', 'Locks room count, adjacency, walls, openings, doors, and fixed elements to the source. Everything is coloured; nothing is added.')}</span></div>
           <label className="floorplan-render-style-select"><span>{t('最終レンダースタイル', 'Final render style')}</span><select value={renderStyle} onChange={(event) => chooseRenderStyle(event.target.value as FloorplanRenderStyle)}>{RENDER_STYLES.map((option) => <option value={option.id} key={option.id}>{option.number} · {language === 'ja' ? option.ja : option.en} — {language === 'ja' ? option.detailJa : option.detailEn}</option>)}</select></label>
           <div className="floorplan-texture-scale">
             <div><span>{t('テクスチャ縮尺', 'Texture scale')}</span><strong>{textureScalePercent}%</strong></div>
             <div className="floorplan-texture-slider"><small>50%</small><input aria-label={t('ドア幅に対するテクスチャ縮尺', 'Texture scale relative to door width')} type="range" min="50" max="200" step="10" value={textureScalePercent} onChange={(event) => changeTextureScale(Number(event.target.value))} /><small>200%</small><button disabled={textureScalePercent === 100} onClick={() => changeTextureScale(100)}>1:1</button></div>
             <p><b>{t('基準', 'Reference')}: 1 {t('ドア', 'door')} = {(analysis.assumedDoorWidthM || doorWidth).toFixed(2)} m</b><span>{t('100%は実寸。小さくすると柄が細かく、大きくすると柄が大きくなります。', '100% uses physical product dimensions. Lower values make the pattern finer; higher values make it larger.')}</span></p>
           </div>
+          <div className="floorplan-accuracy-note advisory">{t('ベクター図は床のみ着彩します。壁・建具・設備・元図面の家具は最終レンダーで同じスタイルに着彩されます（追加はしません）。', 'The vector plan colours floors only. Walls, joinery, fixtures, and furniture already in the source are coloured in the same style by the final render — nothing is added.')}</div>
           {Boolean(criticalAnalysisIssues.length) && <div className="floorplan-accuracy-note">⚠ {t('生成前に警告のある部屋輪郭を確認してください。', 'Review flagged room outlines before rendering.')}</div>}
           {outlineNeedsCalibration && <div className="floorplan-accuracy-note advisory">{t('輪郭が変更されています。カラー範囲には反映されます。', 'Room outlines changed and will be used for material placement.')}</div>}
           {floorplanRenderError && <div className="floorplan-render-error"><strong>{t('今回は生成されませんでした', 'Not rendered this time')}</strong><span>{floorplanRenderError}</span></div>}
           <button className="floorplan-color-render-button" disabled={renderingFloorplan || !analysis.rooms.length || selectedMaterialCount !== analysis.rooms.length} onClick={renderColorFloorplan}><span>{renderedFloorplan ? floorplanRenderStale ? t('変更を反映して再構築', 'Recreate with changes') : t('もう一度再構築', 'Recreate another version') : t('図面全体を再構築', 'Recreate full floorplan')}</span><b>→</b></button>
           <small className="floorplan-credit-note">{t('クリックごとに画像生成を1回実行 · 自動再試行なし', 'One image-generation call per click · no automatic retry')}</small>
         </div>
-      </> : <div className="floorplan-empty-results"><span>01</span><strong>{t('平面図を解析すると、ここに部屋が並びます', 'Detected rooms will appear here')}</strong><p>{t('部屋名と輪郭を確認し、各室に床材を選択できます。', 'Review room names and outlines, then assign a floor material to every room.')}</p></div>}
+      </> : <div className="floorplan-empty-results"><span>01</span><strong>{t('平面図を解析すると、ここに部屋が並びます', 'Detected rooms will appear here')}</strong><p>{t('部屋名と輪郭を確認し、各室に床材と壁材を選択できます。', 'Review room names and outlines, then assign a floor and wall material to every room.')}</p></div>}
     </aside>
   </section>;
 }

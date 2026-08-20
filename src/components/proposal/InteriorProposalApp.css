@@ -90,7 +90,7 @@ button { cursor: pointer; }
 .quick-fields input, .quick-fields select { width: 100%; padding: 0; border: 0; outline: 0; color: var(--fg1); background: transparent; font-size: var(--fs-sm); font-weight: var(--w-medium); text-overflow: ellipsis; }
 
 .workspace-pane.is-inactive { display: none; }
-.floorplan-workspace { --pane-height: clamp(600px, calc(100vh - 230px), 820px); display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: stretch; }
+.floorplan-workspace { --pane-height: clamp(560px, calc(100vh - 480px), 820px); display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: stretch; }
 .floorplan-main-panel, .floorplan-room-panel { min-width: 0; height: var(--pane-height); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--white); overflow: hidden; }
 .floorplan-header { min-height: 100px; padding: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--border); }
 .floorplan-header > div { min-width: 0; }
@@ -222,6 +222,7 @@ button { cursor: pointer; }
 .room-geometry-actions { margin: -2px 11px 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .room-geometry-actions button { min-width: 0; padding: 6px 7px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
 .room-geometry-actions button:hover, .room-geometry-actions button.active { border-color: var(--archix-blue); background: var(--accent-wash); }
+.room-material-pickers { display: grid; gap: 0; }
 .room-material-picker { margin: 0 11px 10px; padding: 8px; display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px; border: 1px solid var(--border); background: var(--bg-soft); }
 .room-material-picker > i { width: 32px; height: 32px; border: 1px solid rgba(28,30,33,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
 .room-material-picker > span { min-width: 0; }
@@ -267,7 +268,7 @@ button { cursor: pointer; }
 .floorplan-empty-results strong { max-width: 24ch; font-family: var(--font-display); font-size: var(--fs-h3); line-height: var(--lh-heading); }
 .floorplan-empty-results p { max-width: 32ch; margin: 10px 0 0; color: var(--fg2); font-size: var(--fs-sm); }
 
-.studio-workspace { --pane-height: clamp(520px, calc(100vh - 230px), 780px); display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; }
+.studio-workspace { --pane-height: clamp(520px, calc(100vh - 480px), 780px); display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; }
 .visual-panel, .changes-panel, .schedule-panel { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--white); overflow: hidden; }
 .visual-panel { min-width: 0; height: var(--pane-height); display: flex; flex-direction: column; }
 .visual-toolbar { min-height: 52px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); }
@@ -509,6 +510,86 @@ button { cursor: pointer; }
 .schedule-totals .total strong { color: var(--archix-blue); font-size: var(--fs-h3); }
 
 button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--archix-blue); outline-offset: 2px; }
+
+/* Laptop-height screens (13" retina at 1440x770 and similar): keep the whole
+   studio inside one viewport instead of pushing the primary actions below the fold. */
+@media (max-height: 1040px) {
+  .studio-main { padding: 14px 0 18px; }
+  .studio-title { display: none; }
+  .room-tabs { margin-bottom: 8px; }
+  .room-tab { min-height: 50px; padding: 7px 26px 7px 12px; }
+  .quick-fields { margin-bottom: 10px; }
+  .quick-fields label { padding: 7px 12px; }
+  .quick-fields label > span { margin-bottom: 3px; }
+
+  .floorplan-workspace { --pane-height: max(360px, calc(100vh - 224px)); }
+  .studio-workspace { --pane-height: max(340px, calc(100vh - 224px)); }
+
+  .floorplan-header { min-height: 0; padding: 11px 14px; gap: 18px; }
+  .floorplan-header h2 { margin: 5px 0 3px; font-size: 16px; }
+  .floorplan-header p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 11px; }
+  .floorplan-workflow-steps { min-height: 44px; padding: 0 14px; }
+  .floorplan-workflow-steps > div { padding: 6px 12px; }
+  .floorplan-controls { min-height: 0; padding: 10px 14px; gap: 14px; }
+
+  .floorplan-render-panel { flex: none; padding: 10px 11px; }
+  .floorplan-calibration { display: none; }
+  .floorplan-texture-scale { display: none; }
+  .floorplan-render-style-select > span { margin-bottom: 3px; }
+  .floorplan-color-render-button { margin-top: 8px; padding: 9px 12px; }
+  .changes-heading { min-height: 0; padding: 10px 12px; }
+  .changes-heading > div > span { display: none; }
+  .changes-heading h2 { font-size: 15px; }
+  .changes-heading > strong { width: 26px; height: 26px; }
+  .floorplan-texture-scale p { display: none; }
+  .floorplan-auto-materials { margin: 8px 10px 0; }
+
+  .visual-toolbar { min-height: 0; padding: 7px 14px; }
+  .render-bar { min-height: 0; padding: 11px 14px; }
+  .selection-total { min-height: 52px; padding: 10px 16px; }
+  .active-finish-grid > div { min-height: 78px; padding: 10px 12px; }
+  .schedule-table-wrap { max-height: min(46vh, 380px); }
+
+  /* Strip explanatory prose: on a laptop screen the plan and the room
+     materials are what the demo needs, not the copy around them. */
+  .floorplan-header { min-height: 0; padding: 10px 14px; }
+  .floorplan-header span, .floorplan-header p { display: none; }
+  .floorplan-header h2 { margin: 0; font-size: 15px; }
+  .floorplan-workflow-steps { min-height: 40px; }
+  .floorplan-controls > div small { display: none; }
+  .floorplan-controls { min-height: 0; padding: 9px 14px; }
+  .floorplan-gesture-hint { display: none; }
+  .upload-message em { display: none; }
+  .floorplan-calibration small { display: none; }
+  .floorplan-auto-materials { grid-template-columns: 22px minmax(0, 1fr); align-items: center; }
+  .floorplan-auto-materials > span { grid-row: auto; }
+  .floorplan-auto-materials small { display: none; }
+  .floorplan-render-heading, .floorplan-structure-lock { display: none; }
+  .floorplan-accuracy-note.advisory { display: none; }
+  .floorplan-credit-note { display: none; }
+  .estimate-intro small { display: none; }
+  .reference-note { display: none; }
+  .render-credit-note { display: none; }
+  .preview-verification-panel small { display: none; }
+  .active-finish-summary > p { display: none; }
+  .finish-sheet-footer p, .schedule-footer p { display: none; }
+
+  /* Denser room cards so more room finishes are visible at once. */
+  .detected-room-list { padding: 8px; }
+  .detected-room-card { margin-bottom: 8px; }
+  .detected-room-title { padding: 8px 10px; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+  .room-index { width: 22px; height: 22px; }
+  .room-material-pickers { gap: 5px; margin: 0 10px 6px; }
+  .room-material-picker { margin: 0; padding: 4px 6px; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; }
+  .room-material-picker > span { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+  .room-material-picker small { margin: 0; }
+  .room-material-picker > i { width: 20px; height: 20px; }
+  .room-material-picker small { margin-bottom: 1px; }
+  .room-material-picker select { padding: 2px 20px 2px 0; }
+  .room-area-summary { display: none; }
+  .room-geometry-actions { padding: 0 10px 8px; }
+  .active-finish-grid > div { min-height: 58px; padding: 8px 12px; }
+}
 
 @media (max-width: 1120px) {
   .quick-fields { grid-template-columns: repeat(4, 1fr); }
