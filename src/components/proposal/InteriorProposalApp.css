@@ -261,6 +261,8 @@ button { cursor: pointer; }
 .floorplan-render-error strong, .floorplan-render-error span { display: block; }
 .floorplan-color-render-button { width: 100%; margin-top: 9px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; border: 0; color: var(--white); background: var(--archix-blue); font-size: var(--fs-sm); font-weight: var(--w-semibold); }
 .floorplan-color-render-button:hover:not(:disabled) { background: var(--archix-blue-600); }
+.floorplan-download-button { width: 100%; margin-top: 7px; padding: 8px 12px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
+.floorplan-download-button:hover { border-color: var(--archix-blue); background: var(--accent-wash); }
 .floorplan-color-render-button:disabled { cursor: not-allowed; opacity: .4; }
 .floorplan-credit-note { display: block; margin-top: 6px; color: var(--fg3); font-size: 9px; text-align: center; }
 .floorplan-empty-results { flex: 1; padding: 36px 24px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; background: var(--bg-soft); }
@@ -281,6 +283,9 @@ button { cursor: pointer; }
 .render-state { color: var(--fg3); font-size: var(--fs-micro); font-weight: var(--w-semibold); letter-spacing: var(--track-label); text-transform: uppercase; }
 .render-state.ready { color: var(--archix-blue); }
 .change-photo { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-0); color: var(--ink); background: var(--white); font-size: var(--fs-sm); font-weight: var(--w-semibold); transition: background var(--transition), border-color var(--transition); }
+.download-jpg { padding: 7px 10px; border: 1px solid var(--border); color: var(--archix-blue); background: var(--white); font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: var(--w-semibold); }
+.download-jpg:hover:not(:disabled) { border-color: var(--archix-blue); background: var(--accent-wash); }
+.download-jpg:disabled { cursor: not-allowed; opacity: .45; }
 .change-photo:hover:not(:disabled) { background: var(--bg-soft); border-color: var(--ink); }
 .change-photo:disabled { cursor: wait; opacity: .45; }
 

@@ -17,6 +17,7 @@ import {
 } from './catalog';
 import { blankFinishScheduleRow, cloneFinishSchedule, scheduleText, DERIVED_SCHEDULE_FIELDS, type DerivedFinishScheduleField, type FinishScheduleField, type FinishScheduleRow } from './finishSchedule';
 import { prepareImage, readJsonResponse, MAX_SINGLE_IMAGE_LENGTH } from './downscaleImage';
+import { downloadBlob, downloadImageAsJpeg, imageFileSlug } from './downloadImage';
 import FloorplanWorkspace from './FloorplanWorkspace';
 import { demoAiErrorMessage } from './demoAiErrors';
 import '../../styles/archix.css';
@@ -314,17 +315,6 @@ const ScheduleRow = React.memo(function ScheduleRow({
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
 }[char] || char));
-
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-};
 
 export default function InteriorProposalApp() {
   const [language, setLanguage] = useState<Language>('ja');
@@ -776,6 +766,12 @@ export default function InteriorProposalApp() {
     updateActiveDraft({ previewApprovedAt: new Date().toISOString() });
   };
 
+  const downloadPreviewJpeg = () => {
+    if (!previewUrl) return;
+    downloadImageAsJpeg(previewUrl, `${imageFileSlug(room.en)}-preview.jpg`)
+      .catch((error) => setPreviewError(error instanceof Error ? error.message : t('画像を保存できませんでした。', 'The image could not be saved.')));
+  };
+
   const buildProposalHtml = () => {
     const rows = selectedItems.map((item) => {
       const quantity = getQuantity(item);
@@ -910,6 +906,7 @@ export default function InteriorProposalApp() {
               </div>
               <div className="visual-tools">
                 <span className={`render-state ${previewApprovedAt && !previewStale ? 'ready' : ''}`}>{previewLoading ? t('生成中…', 'Rendering…') : previewStale ? t('変更あり · 必要なら更新', 'Changes pending · update if needed') : previewApprovedAt ? t('デモ準備済み', 'Demo-ready preview') : previewUrl ? t('簡易確認待ち', 'Ready for review') : t('未生成', 'Not rendered')}</span>
+                {previewUrl && <button className="download-jpg" disabled={previewLoading} onClick={downloadPreviewJpeg}>↓ JPG</button>}
                 <button className="change-photo" disabled={estimateLoading || previewLoading} onClick={() => fileInputRef.current?.click()}>{sourcePhotoUrl ? t('写真を変更', 'Change photo') : t('写真を選択', 'Choose photo')}</button>
               </div>
             </div>
