@@ -13,7 +13,7 @@ selected finishes / fixtures / furniture
            └── live structured 仕上げ表 / estimate handoff
 ```
 
-The structured selections are the proposal source of truth. Changing an item updates the schedule immediately. The AI preview is a slower visual interpretation of those selections and is marked as needing regeneration after a change. The demo uses coherent `AK-POC-*` codes, Asahi-specific POC labels, and fictional prices rather than unrelated third-party branding. These records are for demonstration only and must be replaced before commercial use.
+The structured selections are the proposal source of truth. Changing an item updates the schedule immediately. The AI preview is a slower visual interpretation of those selections and is marked as needing regeneration after a change. The demo uses coherent `POC-*` codes, unbranded POC labels, and fictional prices rather than third-party branding. These records are for demonstration only and must be replaced before commercial use.
 
 ## Implemented interaction
 
@@ -32,7 +32,7 @@ The structured selections are the proposal source of truth. Changing an item upd
 |---|---|
 | Live customer conversation | Schedule and totals are ordinary application state and update instantly without an AI request. |
 | Preview latency | The last preview remains visible and is labeled “update needed” until regenerated. |
-| Demo coherence | Public Asahi documents substantiate specification categories; fictional POC codes and prices avoid unrelated commercial branding. AI never creates additional billable records. |
+| Demo coherence | Common residential specification tiers substantiate the categories; fictional POC codes and prices avoid commercial branding. AI never creates additional billable records. |
 | Quantity assistance | Gemini estimates floor, net wall, and ceiling area from the photo using an assumed ceiling-height anchor; the schedule remains editable. |
 | Existing-room fidelity | This is an image-editing prompt, not text-to-image generation. It explicitly freezes the camera and architecture. |
 | Privacy | The photo stays local until the user presses Render. A persistent notice explains that rendering sends the photo and selections to Gemini; there is no separate confirmation checkbox. |
@@ -46,7 +46,7 @@ Text and color swatches alone cannot guarantee that a generated finish matches a
 
 ## Recommended production path
 
-1. Replace fictional POC records with Asahi's current internal product master, approved supplier list, option rules, and prices.
+1. Replace fictional POC records with the customer's internal product master, approved supplier list, option rules, and prices.
 2. Attach one or more approved reference photographs to each finish and furniture record.
 3. Let the rep mark “keep,” “remove,” and “replace” objects in the source room; add optional masks for exact wall/floor regions.
 4. Store proposal revisions, source images, generated previews, catalog snapshots, and approvals.

@@ -1,8 +1,8 @@
-# Asahi Kensetsu Interior Proposal POC
+# Interior Proposal POC
 
 A standalone bilingual proof of concept for an interior sales meeting. A salesperson uploads a photograph of an existing room, selects new finishes and furniture, generates an AI-edited preview, and exports a live 仕上げ表 (finish schedule) for estimating and client handoff.
 
-The structured selections—not the AI image—are the source of truth. The same records are sent to the preview prompt and displayed in the finish schedule. Public Asahi Kensetsu documents inform the categories; coherent, clearly marked POC SKUs and prices make the demo usable without introducing unrelated supplier branding.
+The structured selections—not the AI image—are the source of truth. The same records are sent to the preview prompt and displayed in the finish schedule. Typical Japanese residential specification documents inform the categories; coherent, clearly marked POC SKUs and prices make the demo usable without introducing supplier branding.
 
 ## Prerequisites
 
@@ -98,10 +98,10 @@ The checklist is backed by the bilingual catalog in `src/components/proposal/cat
 - Size and unit.
 - Fictional, editable POC unit price and display swatch.
 - Specification status (`Standard`, `Standard+`, `Option`, or `Reference furniture`).
-- Public source label and URL.
+- Public source label.
 - Exact-product confirmation state for later replacement with production data.
 
-The included finish and equipment categories are based on Asahi Kensetsu's public [specifications and equipment page](https://www.asahi21.co.jp/ac-mansion/shiyo.html), [2LDK specification](https://www.asahi21.co.jp/ac-mansion/pdf2/2ldk.pdf), and [parts gallery](https://www.asahi22.jp/parts_gallery/). The displayed `AK-POC-*` codes, prices, and `Asahi Kensetsu Selection (POC)` maker label are intentionally fictional demo data. No unrelated third-party branding is presented as an Asahi product.
+The included finish and equipment categories follow common Japanese residential specification tiers. The displayed `POC-*` codes and prices are intentionally fictional demo data, and every item carries a `要確認` / `To be confirmed` maker label. No third-party branding is presented as a real product.
 
 Furniture and accessories start unselected and use neutral, unbranded POC records. An unchecked item is not sent to Gemini and does not appear in the schedule.
 
@@ -239,7 +239,7 @@ Use a clear source photograph and state exactly what must remain in the customer
 ## Important limitations
 
 - The AI preview is a visual concept, not a construction drawing or product-appearance guarantee.
-- Public Asahi documents inform the categories, but `AK-POC-*` SKUs, prices, maker labels, proposed colours, and generic furniture are fictional demo inputs rather than approved products.
+- Typical residential specification tiers inform the categories, but `POC-*` SKUs, prices, maker labels, proposed colours, and generic furniture are fictional demo inputs rather than approved products.
 - Single-photo area estimation is approximate and cannot replace measured drawings or a site survey.
 - This version has no authentication, persistence, revision history, approval workflow, ERP integration, or archival server-generated PDF.
 - Text descriptions and color swatches are weaker references than real manufacturer product photography.
