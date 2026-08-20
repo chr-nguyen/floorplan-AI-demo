@@ -4,6 +4,7 @@ import { prepareImage, readJsonResponse, MAX_SINGLE_IMAGE_LENGTH } from './downs
 import { clearStoredFloorplan } from './floorplanImageStore';
 import { countLineCrossings, hasSelfIntersection, polygonArea, splitPolygon, type FloorplanPoint } from './floorplanGeometry';
 import { demoAiErrorMessage } from './demoAiErrors';
+import { downloadImageAsJpeg, imageFileSlug } from './downloadImage';
 import { CATALOG } from './catalog';
 
 export interface FloorplanRoom {
@@ -399,6 +400,13 @@ export default function FloorplanWorkspace({ language }: Props) {
     setFloorplanView('plan');
     setFloorplanRenderError(undefined);
     if (renderedFloorplan) setFloorplanRenderStale(true);
+  };
+
+  const downloadRenderedFloorplanJpeg = () => {
+    if (!renderedFloorplan) return;
+    const styleName = RENDER_STYLES.find((option) => option.id === renderStyle);
+    downloadImageAsJpeg(renderedFloorplan, `floorplan-${imageFileSlug(styleName ? styleName.en : renderStyle)}.jpg`)
+      .catch((error) => setFloorplanRenderError(error instanceof Error ? error.message : t('画像を保存できませんでした。', 'The image could not be saved.')));
   };
 
   const showFloorplanView = (view: FloorplanView) => {
@@ -1007,6 +1015,7 @@ export default function FloorplanWorkspace({ language }: Props) {
           {outlineNeedsCalibration && <div className="floorplan-accuracy-note advisory">{t('輪郭が変更されています。カラー範囲には反映されます。', 'Room outlines changed and will be used for material placement.')}</div>}
           {floorplanRenderError && <div className="floorplan-render-error"><strong>{t('今回は生成されませんでした', 'Not rendered this time')}</strong><span>{floorplanRenderError}</span></div>}
           <button className="floorplan-color-render-button" disabled={renderingFloorplan || !analysis.rooms.length || selectedMaterialCount !== analysis.rooms.length} onClick={renderColorFloorplan}><span>{renderedFloorplan ? floorplanRenderStale ? t('変更を反映して再構築', 'Recreate with changes') : t('もう一度再構築', 'Recreate another version') : t('図面全体を再構築', 'Recreate full floorplan')}</span><b>→</b></button>
+          {renderedFloorplan && <button className="floorplan-download-button" onClick={downloadRenderedFloorplanJpeg}>↓ {t('JPGを保存', 'Save as JPG')}</button>}
           <small className="floorplan-credit-note">{t('クリックごとに画像生成を1回実行 · 自動再試行なし', 'One image-generation call per click · no automatic retry')}</small>
         </div>
       </> : <div className="floorplan-empty-results"><span>01</span><strong>{t('平面図を解析すると、ここに部屋が並びます', 'Detected rooms will appear here')}</strong><p>{t('部屋名と輪郭を確認し、各室に床材と壁材を選択できます。', 'Review room names and outlines, then assign a floor and wall material to every room.')}</p></div>}
