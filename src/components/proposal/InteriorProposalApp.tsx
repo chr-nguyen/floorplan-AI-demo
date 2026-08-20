@@ -17,7 +17,7 @@ import {
 } from './catalog';
 import { blankFinishScheduleRow, cloneFinishSchedule, scheduleText, DERIVED_SCHEDULE_FIELDS, type DerivedFinishScheduleField, type FinishScheduleField, type FinishScheduleRow } from './finishSchedule';
 import { prepareImage, readJsonResponse, MAX_SINGLE_IMAGE_LENGTH } from './downscaleImage';
-import FloorplanWorkspace, { type AppliedFloorplanRoom, type FloorFinishPreview, type FloorplanSurface } from './FloorplanWorkspace';
+import FloorplanWorkspace from './FloorplanWorkspace';
 import { demoAiErrorMessage } from './demoAiErrors';
 import '../../styles/archix.css';
 import './InteriorProposalApp.css';
@@ -28,7 +28,6 @@ interface RoomTab {
   ja: string;
   en: string;
   custom?: boolean;
-  sourceFloorplanRoomId?: string;
 }
 
 const DEFAULT_ROOM_TABS: RoomTab[] = [
@@ -87,7 +86,7 @@ interface SurfaceEstimate {
   confidence: 'low' | 'medium' | 'high';
   assumptionJa: string;
   assumptionEn: string;
-  measurementSource?: 'floorplan-ai-reviewed' | 'photo-ai-suggestion';
+  measurementSource?: 'photo-ai-suggestion';
   reviewedAt?: string;
   validationIssues?: string[];
   measurementStatus?: string;
@@ -128,8 +127,6 @@ const createRoomDraft = (): RoomDraft => ({
 
 const createInitialRoomDrafts = () => Object.fromEntries(DEFAULT_ROOM_TABS.map((room) => [room.id, createRoomDraft()]));
 
-const floorplanSourceIdFor = (roomTab: RoomTab) => roomTab.sourceFloorplanRoomId || roomTab.id.match(/^plan-\d+-(.+)$/)?.[1];
-
 const CATALOG_BY_ID = new Map(CATALOG.map((item) => [item.id, item]));
 const catalogItem = (id: string | undefined) => (id ? CATALOG_BY_ID.get(id) : undefined);
 const CATALOG_BY_SLOT = SLOT_DEFINITIONS.reduce((map, slot) => {
@@ -143,14 +140,12 @@ const ROOM_TYPES: RoomTab['type'][] = ['kitchen', 'living', 'dining', 'bathroom'
 const sanitizeRoomTabs = (value: unknown): RoomTab[] => {
   const tabs = (Array.isArray(value) ? value : []).flatMap((entry: any) => {
     if (!entry || typeof entry.id !== 'string' || !entry.id) return [];
-    if (entry.sourceFloorplanRoomId || /^plan-\d+-/.test(entry.id)) return [];
     return [{
       id: entry.id,
       type: ROOM_TYPES.includes(entry.type) ? entry.type : 'custom',
       ja: typeof entry.ja === 'string' && entry.ja ? entry.ja : entry.id,
       en: typeof entry.en === 'string' && entry.en ? entry.en : entry.id,
       custom: entry.custom === true,
-      sourceFloorplanRoomId: typeof entry.sourceFloorplanRoomId === 'string' ? entry.sourceFloorplanRoomId : undefined,
     } as RoomTab];
   });
   const unique = tabs.filter((tab, index) => tabs.findIndex((candidate) => candidate.id === tab.id) === index);
@@ -333,8 +328,8 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 export default function InteriorProposalApp() {
   const [language, setLanguage] = useState<Language>('ja');
-  const [projectName, setProjectName] = useState('朝日様邸 内装計画');
-  const [customerName, setCustomerName] = useState('朝日建設株式会社');
+  const [projectName, setProjectName] = useState('サンプル邸 内装計画');
+  const [customerName, setCustomerName] = useState('サンプル建設株式会社');
   const [roomTabs, setRoomTabs] = useState<RoomTab[]>(DEFAULT_ROOM_TABS);
   const [activeRoomId, setActiveRoomId] = useState(DEFAULT_ROOM_TABS[0].id);
   const [workspaceView, setWorkspaceView] = useState<'floorplan' | 'room'>('floorplan');
@@ -363,7 +358,6 @@ export default function InteriorProposalApp() {
   const roomType = room.type;
   const activeDraft = useMemo(() => roomDrafts[activeRoomId] || createRoomDraft(), [roomDrafts, activeRoomId]);
   const { style, requestNote, sourcePhotoUrl, sourcePhotoData, sourcePhotoName, selections, enabledSlots, accessories, quantities, previewUrl, previewStale, previewApprovedAt, assumedCeilingHeight, surfaceEstimate, surfaceEstimateSuggestion } = activeDraft;
-  const usesFloorplanTakeoff = Boolean(floorplanSourceIdFor(room));
   const displayedSurfaceEstimate = surfaceEstimateSuggestion || surfaceEstimate;
 
   useEffect(() => {
@@ -512,23 +506,6 @@ export default function InteriorProposalApp() {
   const activeScheduleRoomId = activeRoomId;
   const renderedRoomCount = roomTabs.filter((candidate) => roomDrafts[candidate.id]?.previewUrl && !roomDrafts[candidate.id]?.previewStale && roomDrafts[candidate.id]?.previewApprovedAt).length;
   const activeScheduleRow = finishScheduleRows.find((row) => row.id === activeScheduleRoomId);
-  const linkedFloorplanRoomIds = useMemo(() => Object.fromEntries(roomTabs.flatMap((roomTab) => {
-    const sourceRoomId = floorplanSourceIdFor(roomTab);
-    return sourceRoomId ? [[sourceRoomId, roomTab.id]] : [];
-  })), [roomTabs]);
-  const floorFinishPreviews = useMemo<Record<string, FloorFinishPreview>>(() => Object.fromEntries(roomTabs.flatMap((roomTab) => {
-    const sourceRoomId = floorplanSourceIdFor(roomTab);
-    const draft = roomDrafts[roomTab.id];
-    if (!sourceRoomId || !draft || !draft.enabledSlots.includes('floor')) return [];
-    const floorItem = catalogItem(draft.selections.floor);
-    return floorItem ? [[sourceRoomId, {
-      swatch: floorItem.swatch,
-      label: `${itemName(floorItem, language)} · ${itemColor(floorItem, language)}`,
-      roomName: roomTab[language],
-    }]] : [];
-  })), [roomTabs, roomDrafts, language]);
-  const linkedFloorplanRoomCount = Object.keys(linkedFloorplanRoomIds).length;
-
   const estimateRoomSurfaces = async (imageData: string, targetRoomId: string, targetRoomName: string, ceilingHeight: number) => {
     if (estimateInFlightRef.current) return;
     estimateInFlightRef.current = true;
@@ -577,7 +554,8 @@ export default function InteriorProposalApp() {
       return;
     }
     const targetRoomId = activeRoomId;
-    const targetUsesFloorplanTakeoff = usesFloorplanTakeoff;
+    const targetRoomName = room.en;
+    const targetCeilingHeight = assumedCeilingHeight;
     void prepareImage(file, { maxEdge: 2560, jpegQuality: 0.92, maxLength: MAX_SINGLE_IMAGE_LENGTH }).then((imageData) => {
       const nextPhotoUrl = URL.createObjectURL(file);
       if (sourcePhotoUrl) URL.revokeObjectURL(sourcePhotoUrl);
@@ -593,9 +571,9 @@ export default function InteriorProposalApp() {
           previewApprovedAt: undefined,
           renderMetadata: undefined,
           renderedAt: undefined,
-          surfaceEstimate: targetUsesFloorplanTakeoff ? draft.surfaceEstimate : undefined,
+          surfaceEstimate: undefined,
           surfaceEstimateSuggestion: undefined,
-          quantities: targetUsesFloorplanTakeoff ? draft.quantities : {
+          quantities: {
             ...draft.quantities,
             [draft.selections.floor]: DEFAULT_SLOT_QUANTITY.floor,
             [draft.selections.walls]: DEFAULT_SLOT_QUANTITY.walls,
@@ -606,6 +584,7 @@ export default function InteriorProposalApp() {
       setViewMode('source');
       setPreviewError(undefined);
       setEstimateError(undefined);
+      void estimateRoomSurfaces(imageData, targetRoomId, targetRoomName, targetCeilingHeight);
     }).catch((error) => {
       setPreviewError(t('画像を読み込めませんでした。', error instanceof Error ? error.message : 'The image could not be loaded.'));
     });
@@ -621,7 +600,7 @@ export default function InteriorProposalApp() {
   };
 
   const acceptSurfaceEstimate = () => {
-    if (!surfaceEstimateSuggestion || usesFloorplanTakeoff) return;
+    if (!surfaceEstimateSuggestion) return;
     updateActiveDraft((draft) => ({
       surfaceEstimate: { ...surfaceEstimateSuggestion, reviewedAt: new Date().toISOString() },
       surfaceEstimateSuggestion: undefined,
@@ -721,92 +700,6 @@ export default function InteriorProposalApp() {
     setEstimateError(undefined);
   };
 
-  const applyFloorplanRooms = (detectedRooms: AppliedFloorplanRoom[]) => {
-    if (!detectedRooms.length) return;
-    const existingRoomsBySource = new Map(roomTabs.flatMap((roomTab) => {
-      const sourceRoomId = floorplanSourceIdFor(roomTab);
-      return sourceRoomId ? [[sourceRoomId, roomTab] as const] : [];
-    }));
-    const nextTabs: RoomTab[] = detectedRooms.map((detectedRoom, index) => {
-      const existingRoom = existingRoomsBySource.get(detectedRoom.id);
-      return {
-        id: existingRoom?.id || `plan-${index + 1}-${detectedRoom.id}`,
-        type: detectedRoom.roomType,
-        ja: detectedRoom.nameJa,
-        en: detectedRoom.nameEn,
-        custom: true,
-        sourceFloorplanRoomId: detectedRoom.id,
-      };
-    });
-
-    const keptIds = new Set(nextTabs.map((nextRoom) => nextRoom.id));
-    const droppedTabs = roomTabs.filter((roomTab) => !keptIds.has(roomTab.id));
-    const droppedWork = droppedTabs.some((roomTab) => {
-      const draft = roomDrafts[roomTab.id];
-      return Boolean(draft && (draft.sourcePhotoData || draft.previewUrl || draft.accessories.length || draft.surfaceEstimate));
-    }) || finishScheduleRows.some((row) => !keptIds.has(row.id) && row.edited?.length);
-    if (droppedWork && !window.confirm(t(
-      `平面図の部屋で置き換えると、${droppedTabs.length}室の写真・選定・仕上表の編集内容が失われます。続けますか？`,
-      `Replacing rooms from the floorplan discards the photos, selections, and schedule edits for ${droppedTabs.length} room(s). Continue?`,
-    ))) return;
-    if (!droppedWork && renderedRoomCount > 0 && !window.confirm(linkedFloorplanRoomCount
-      ? t('平面図の部屋と面積を再同期します。既存の仕上げ選択は保持されます。続けますか？', 'Resync rooms and areas from the floorplan? Existing finish selections will be retained.')
-      : t('現在の部屋リストと生成済みプレビューを、平面図から抽出した部屋へ置き換えますか？', 'Replace the current room list and rendered previews with the rooms detected from this floorplan?'))) return;
-
-    droppedTabs.forEach((roomTab) => {
-      const url = roomDrafts[roomTab.id]?.sourcePhotoUrl;
-      if (url) URL.revokeObjectURL(url);
-    });
-    const surfaceIds: FloorplanSurface[] = ['floor', 'walls', 'ceiling'];
-    const nextDrafts: Record<string, RoomDraft> = Object.fromEntries(nextTabs.map((nextRoom, index) => {
-      const detectedRoom = detectedRooms[index];
-      const draft = roomDrafts[nextRoom.id] || createRoomDraft();
-      const enabledSlots = surfaceIds.filter((surface) => detectedRoom.surfaces[surface]);
-      const surfaceEstimate: SurfaceEstimate = {
-        floorAreaM2: detectedRoom.floorAreaM2,
-        netWallAreaM2: detectedRoom.netWallAreaM2,
-        ceilingAreaM2: detectedRoom.ceilingAreaM2,
-        roomWidthM: detectedRoom.roomWidthM,
-        roomDepthM: detectedRoom.roomDepthM,
-        ceilingHeightM: 2.4,
-        confidence: detectedRoom.confidence,
-        assumptionJa: detectedRoom.assumptionJa,
-        assumptionEn: detectedRoom.assumptionEn,
-        measurementSource: 'floorplan-ai-reviewed',
-        reviewedAt: new Date().toISOString(),
-        model: detectedRoom.model,
-        promptVersion: detectedRoom.promptVersion,
-      };
-      return [nextRoom.id, {
-        ...draft,
-        enabledSlots,
-        surfaceEstimate,
-        quantities: {
-          ...draft.quantities,
-          [draft.selections.floor]: detectedRoom.floorAreaM2,
-          [draft.selections.walls]: detectedRoom.netWallAreaM2,
-          [draft.selections.ceiling]: detectedRoom.ceilingAreaM2,
-        },
-      }];
-    }));
-    const nextSchedule = nextTabs.map((nextRoom) => {
-      const existingRow = finishScheduleRows.find((row) => row.id === nextRoom.id);
-      const row = existingRow
-        ? { ...existingRow, room: { ja: nextRoom.ja, en: nextRoom.en } }
-        : blankFinishScheduleRow(nextRoom.id, nextRoom.ja, nextRoom.en);
-      return withSchedulePatch(row, finishSchedulePatch(nextDrafts[nextRoom.id], nextRoom.type));
-    });
-
-    setRoomTabs(nextTabs);
-    setRoomDrafts(nextDrafts);
-    setFinishScheduleRows(nextSchedule);
-    setActiveRoomId(nextTabs[0].id);
-    setWorkspaceView('room');
-    setViewMode('source');
-    setPreviewError(undefined);
-    setEstimateError(undefined);
-  };
-
   const renameActiveRoom = (value: string) => {
     setRoomTabs((current) => current.map((candidate) => candidate.id === activeRoomId
       ? { ...candidate, [language]: value }
@@ -817,7 +710,6 @@ export default function InteriorProposalApp() {
   };
 
   const estimateSurfaces = () => {
-    if (usesFloorplanTakeoff) return;
     if (!sourcePhotoData) {
       setEstimateError(t('先に室内写真をアップロードしてください。', 'Upload a room photo first.'));
       return;
@@ -915,10 +807,10 @@ export default function InteriorProposalApp() {
     const fields: FinishScheduleField[] = ['room', 'floor', 'baseboard', 'dado', 'wall', 'ceiling', 'remarks'];
     const rows = finishScheduleRows.map((row) => fields.map((field) => scheduleText(row[field], language)));
     const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\r\n');
-    downloadBlob(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }), `asahi-interior-finish-schedule.csv`);
+    downloadBlob(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }), 'interior-finish-schedule.csv');
   };
 
-  const exportProposal = () => downloadBlob(new Blob([buildProposalHtml()], { type: 'text/html;charset=utf-8' }), `asahi-${roomType}-interior-proposal.html`);
+  const exportProposal = () => downloadBlob(new Blob([buildProposalHtml()], { type: 'text/html;charset=utf-8' }), `${roomType}-interior-proposal.html`);
 
   const printProposal = () => {
     const popup = window.open('', '_blank');
@@ -962,21 +854,21 @@ export default function InteriorProposalApp() {
             <span>Room Finish Studio</span>
             {workspaceView === 'floorplan'
               ? language === 'ja'
-                ? <h1>平面図から、<span>部屋と仕上げ面積</span>をつくる。</h1>
-                : <h1>Turn a floorplan into <span>rooms and finish areas.</span></h1>
+                ? <h1>元図面を保ち、<span>平面図全体</span>を再構築する。</h1>
+                : <h1>Preserve the source and recreate the <span>entire floorplan.</span></h1>
               : language === 'ja'
                 ? <h1>写真を見ながら、<span>仕上げ</span>と参考家具を選ぶ。</h1>
                 : <h1>Choose <span>finishes</span> and reference furniture while viewing the room.</h1>}
           </div>
-          <div className="live-count"><i />{t('仕上げ表', 'Schedule')} · {renderedRoomCount}/{roomTabs.length} {t('室レンダー済み', 'rooms rendered')}</div>
+          <div className="live-count"><i />{workspaceView === 'floorplan' ? t('構造精度優先 · 独立ワークフロー', 'Structure-first · independent workflow') : <>{t('仕上げ表', 'Schedule')} · {renderedRoomCount}/{roomTabs.length} {t('室レンダー済み', 'rooms rendered')}</>}</div>
         </section>
 
         <nav className="room-tabs" aria-label={t('部屋を選択', 'Choose a room')}>
           <div className="room-tabs-scroll" role="tablist">
             <div className={`room-tab-shell floorplan-tab-shell ${workspaceView === 'floorplan' ? 'active' : ''}`}>
               <button role="tab" aria-selected={workspaceView === 'floorplan'} className="room-tab floorplan-tab" disabled={previewLoading || estimateLoading} onClick={() => setWorkspaceView('floorplan')}>
-                <span className={`room-status-dot ${linkedFloorplanRoomCount ? 'rendered' : ''}`} aria-hidden="true" />
-                <span><strong>{t('平面図', 'Floorplan')}</strong><small>{linkedFloorplanRoomCount ? t(`プロジェクト基準 · ${linkedFloorplanRoomCount}室連携`, `Project basis · ${linkedFloorplanRoomCount} rooms linked`) : t('任意 · 部屋と面積を抽出', 'Optional · detect rooms & areas')}</small></span>
+                <span className="room-status-dot" aria-hidden="true" />
+                <span><strong>{t('平面図カラー化', 'Floorplan colorization')}</strong><small>{t('自動提案 · ベクター · 最終レンダー', 'Auto-assign · vector · final render')}</small></span>
               </button>
             </div>
             {roomTabs.map((roomTab) => {
@@ -994,7 +886,7 @@ export default function InteriorProposalApp() {
               </div>;
             })}
           </div>
-          <button className="add-room-tab" disabled={previewLoading || estimateLoading} onClick={addRoom}>＋ {t('部屋を追加', 'Add room')}</button>
+          <button className="add-room-tab" disabled={previewLoading || estimateLoading} onClick={addRoom}>＋ {t('仕上表に部屋を追加', 'Add room to schedule')}</button>
         </nav>
 
         <section className="quick-fields" aria-label={t('案件情報', 'Project details')}>
@@ -1006,13 +898,7 @@ export default function InteriorProposalApp() {
         </section>
 
         <div className={`workspace-pane ${workspaceView === 'floorplan' ? '' : 'is-inactive'}`} aria-hidden={workspaceView !== 'floorplan'}>
-          <FloorplanWorkspace
-            language={language}
-            onApplyRooms={applyFloorplanRooms}
-            floorFinishes={floorFinishPreviews}
-            linkedRoomIds={linkedFloorplanRoomIds}
-            onOpenRoom={switchRoom}
-          />
+          <FloorplanWorkspace language={language} />
         </div>
         {workspaceView === 'room' && <>
         <section className="studio-workspace">
@@ -1023,19 +909,13 @@ export default function InteriorProposalApp() {
                 <button className={viewMode === 'preview' ? 'active' : ''} onClick={() => setViewMode('preview')} disabled={!previewUrl}>{t('変更後', 'Preview')}</button>
               </div>
               <div className="visual-tools">
-                <span className={`render-state ${previewApprovedAt && !previewStale ? 'ready' : ''}`}>{previewLoading ? t('生成・検証中…', 'Rendering and checking…') : previewStale ? t('変更あり · 再生成が必要', 'Changes pending · render again') : previewApprovedAt ? t('確認済みプレビュー', 'Human-approved preview') : previewUrl ? t('人の確認待ち', 'Awaiting human review') : t('未生成', 'Not rendered')}</span>
+                <span className={`render-state ${previewApprovedAt && !previewStale ? 'ready' : ''}`}>{previewLoading ? t('生成中…', 'Rendering…') : previewStale ? t('変更あり · 必要なら更新', 'Changes pending · update if needed') : previewApprovedAt ? t('デモ準備済み', 'Demo-ready preview') : previewUrl ? t('簡易確認待ち', 'Ready for review') : t('未生成', 'Not rendered')}</span>
                 <button className="change-photo" disabled={estimateLoading || previewLoading} onClick={() => fileInputRef.current?.click()}>{sourcePhotoUrl ? t('写真を変更', 'Change photo') : t('写真を選択', 'Choose photo')}</button>
               </div>
             </div>
 
-            {usesFloorplanTakeoff
-              ? <section className="surface-estimator takeoff-basis" aria-label={t('平面図からの数量', 'Quantities from the floorplan')}>
-                <div className="estimate-intro"><span>FLOORPLAN TAKEOFF</span><strong>{t('平面図の数量を使用中', 'Using floorplan quantities')}</strong><small>{t('この部屋は平面図から作成されているため、写真からの面積推定は行いません。数量の変更は平面図で行ってください。', 'This room comes from the floorplan, so no photo area estimate is run. Change quantities in the floorplan instead.')}</small></div>
-                {surfaceFigures && <div className="estimate-result reviewed">{surfaceFigures}</div>}
-                <button className="estimate-basis-link" onClick={() => setWorkspaceView('floorplan')}>{t('平面図を開く', 'Open the floorplan')} →</button>
-              </section>
-              : <section className="surface-estimator" aria-label={t('面積の自動推定', 'Automatic surface estimate')}>
-                <div className="estimate-intro"><span>OPTIONAL AI AREA SUGGESTION</span><strong>{estimateLoading ? t('写真から面積候補を推定中…', 'Estimating an area suggestion…') : surfaceEstimateSuggestion ? t('AI候補を確認してください', 'Review the AI suggestion') : surfaceEstimate ? t('確認済み数量を使用中', 'Using reviewed quantities') : t('必要な場合だけ面積候補を作成', 'Estimate only when needed')}</strong><small>{surfaceEstimateSuggestion ? t('この候補はまだ数量・金額へ反映されていません。', 'This suggestion is not yet used in quantities or totals.') : t('自動実行しません。「候補を推定」を押した場合のみAIを1回使用します。', 'Nothing runs automatically. AI is used once only when you click “Estimate suggestion”.')}</small></div>
+            <section className="surface-estimator" aria-label={t('面積の自動推定', 'Automatic surface estimate')}>
+                <div className="estimate-intro"><span>AUTOMATIC SPACE DIMENSIONS</span><strong>{estimateLoading ? t('写真から空間寸法を推定中…', 'Estimating space dimensions from the photo…') : surfaceEstimateSuggestion ? t('寸法候補を確認してください', 'Review the dimension suggestion') : surfaceEstimate ? t('確認済み寸法を使用中', 'Using reviewed dimensions') : sourcePhotoData ? t('寸法候補を準備中', 'Preparing dimension suggestion') : t('写真アップロード時に自動推定', 'Estimated automatically on photo upload')}</strong><small>{surfaceEstimateSuggestion ? t('確認すると床・壁・天井の数量へ反映されます。', 'Approve the suggestion to use it for floor, wall, and ceiling quantities.') : t('各部屋の写真ごとに1回実行します。必要ならボタンで再推定できます。', 'Runs once for each room photo. Use the button only when you need another estimate.')}</small></div>
                 <label className="height-input"><span>{t('想定天井高', 'Assumed height')}</span><div><input type="number" min="2" max="5" step="0.1" value={assumedCeilingHeight} onChange={(event) => updateActiveDraft({ assumedCeilingHeight: Number(event.target.value) || 2.4 })} /><em>m</em></div></label>
                 <button className="estimate-button" disabled={!sourcePhotoData || estimateLoading} onClick={estimateSurfaces}>{estimateLoading ? t('推定中…', 'Estimating…') : displayedSurfaceEstimate ? t('別の候補を推定', 'Generate another suggestion') : t('候補を推定', 'Estimate suggestion')}</button>
                 {surfaceFigures && <div className={`estimate-result ${surfaceEstimateSuggestion ? 'pending-review' : 'reviewed'}`}>
@@ -1043,14 +923,14 @@ export default function InteriorProposalApp() {
                   {surfaceEstimateSuggestion && <div className="estimate-review-actions"><button onClick={discardSurfaceEstimate}>{t('破棄', 'Discard')}</button><button className="approve" onClick={acceptSurfaceEstimate}>{t('確認して数量へ反映', 'Approve and use quantities')}</button></div>}
                 </div>}
                 {estimateError && <div className="estimate-error demo-notice">{estimateError}</div>}
-              </section>}
+              </section>
 
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" hidden onChange={(event) => loadSourcePhoto(event.target.files?.[0])} />
             <div className={`visual-stage ${dragActive ? 'dragging' : ''} ${!sourcePhotoUrl ? 'empty' : ''}`} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragActive(false)} onDrop={(event) => { event.preventDefault(); setDragActive(false); loadSourcePhoto(event.dataTransfer.files[0]); }} onClick={() => { if (!sourcePhotoUrl) fileInputRef.current?.click(); }} role={!sourcePhotoUrl ? 'button' : undefined} tabIndex={!sourcePhotoUrl ? 0 : undefined} onKeyDown={(event) => { if (!sourcePhotoUrl && event.key === 'Enter') fileInputRef.current?.click(); }}>
               {previewLoading ? <div className="rendering-message"><span className="studio-spinner" /><strong>{t('選んだ変更を反映しています', 'Applying your selected changes')}</strong><small>{t('30〜90秒ほどかかります', 'Usually 30–90 seconds')}</small></div>
                 : viewMode === 'preview' && previewUrl ? <><img src={previewUrl} alt={t('変更後の室内', 'Updated room')} />{previewStale && <span className="stale-chip">{t('選択が変わりました · 必要なら更新', 'Selections changed · update if needed')}</span>}{!previewStale && <span className="verification-chip pass">{previewApprovedAt ? `✓ ${t('デモ準備済み', 'Demo ready')}` : t('プレビュー完成 · 簡易確認待ち', 'Preview ready · quick review')}</span>}</>
                   : sourcePhotoUrl ? <img src={sourcePhotoUrl} alt={t('元の室内写真', 'Original room')} />
-                    : <div className="upload-message"><span>＋</span><strong>{room[language]} · {t('写真をアップロード', 'Upload a photo')}</strong><small>PNG / JPEG · {usesFloorplanTakeoff ? t('最大12MB · 数量は平面図から取得済み', '12 MB max · quantities already taken from the floorplan') : t('最大12MB · 面積推定は任意', '12 MB max · area estimate is optional')}</small></div>}
+                    : <div className="upload-message"><span>＋</span><strong>{room[language]} · {t('写真をアップロード', 'Upload a photo')}</strong><small>PNG / JPEG · {t('最大12MB · 空間寸法を自動推定', '12 MB max · dimensions estimated automatically')}</small></div>}
             </div>
 
             {previewError && <div className="render-error demo-notice"><strong>{t('今回は生成されませんでした', 'Not generated this time')}</strong><span>{previewError}</span></div>}
@@ -1132,7 +1012,7 @@ export default function InteriorProposalApp() {
                 liveLabel={t('選択反映中', 'Selections live')}
               />)}
             </tbody></table></div>
-            <div className="finish-sheet-footer"><button onClick={addRoom}>＋ {t('部屋を追加', 'Add room')}</button><p>{t('材料を選ぶと仕上表へ即時反映されます。青い行が現在編集中の部屋です。各セルは直接編集できます。', 'Material choices appear here immediately. The blue row is the room currently being edited; every cell remains directly editable.')}</p></div>
+            <div className="finish-sheet-footer"><button onClick={addRoom}>＋ {t('仕上表に部屋を追加', 'Add room to schedule')}</button><p>{t('材料を選ぶと仕上表へ即時反映されます。青い行が現在編集中の部屋です。各セルは直接編集できます。', 'Material choices appear here immediately. The blue row is the room currently being edited; every cell remains directly editable.')}</p></div>
           </> : scheduleView === 'estimate' ? <>
             <div className="schedule-table-wrap"><table className="schedule-table"><thead><tr><th>{t('選定品', 'Selected item')}</th><th>{t('区分・状態', 'Type / status')}</th><th>{t('色・品番', 'Color / code')}</th><th>{t('メーカー・出典', 'Maker / source')}</th><th>{t('数量', 'Qty')}</th><th>{t('単価', 'Unit price')}</th><th>{t('金額', 'Amount')}</th></tr></thead><tbody>
               {selectedItems.length ? selectedItems.map((item) => {
